@@ -82,6 +82,8 @@ app.get('/api/vasche', (req, res) => {
             commessa: row.commessa,
             lunghezza: row.lunghezza,
             posizione: row.posizione,
+            fila: row.fila,
+            offsetInizio: row.offset_inizio,
             colore: row.colore,
             stato: row.stato,
             dataCreazione: row.data_creazione
@@ -104,9 +106,9 @@ app.post('/api/vasche', (req, res) => {
             return;
         }
 
-        const sql = `INSERT INTO vasche (id, codice, cliente, commessa, lunghezza, posizione, colore, stato, data_creazione) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        const params = [id, codice, cliente, commessa, lunghezza, null, colore, stato, dataCreazione];
+        const sql = `INSERT INTO vasche (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, colore, stato, data_creazione) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const params = [id, codice, cliente, commessa, lunghezza, null, null, null, colore, stato, dataCreazione];
 
         db.run(sql, params, function (err) {
             if (err) {
@@ -121,7 +123,7 @@ app.post('/api/vasche', (req, res) => {
 // Update a vasca (position, state, etc)
 app.put('/api/vasche/:id', (req, res) => {
     const { id } = req.params;
-    const { posizione, stato } = req.body;
+    const { posizione, fila, offsetInizio, stato } = req.body;
 
     // Build dynamic update query
     let sql = 'UPDATE vasche SET ';
@@ -134,6 +136,14 @@ app.put('/api/vasche/:id', (req, res) => {
     if (stato !== undefined) {
         sql += 'stato = ?, ';
         params.push(stato);
+    }
+    if (fila !== undefined) {
+        sql += 'fila = ?, ';
+        params.push(fila);
+    }
+    if (offsetInizio !== undefined) {
+        sql += 'offset_inizio = ?, ';
+        params.push(offsetInizio);
     }
 
     sql = sql.slice(0, -2); // Remove last comma

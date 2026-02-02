@@ -38,6 +38,8 @@ function initializeSchema() {
       commessa TEXT NOT NULL,
       lunghezza REAL NOT NULL,
       posizione TEXT,
+      fila TEXT,
+      offset_inizio REAL,
       colore TEXT NOT NULL,
       stato TEXT NOT NULL,
       data_creazione TEXT NOT NULL

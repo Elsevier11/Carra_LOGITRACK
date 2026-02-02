@@ -12,7 +12,9 @@ interface Vasca {
   cliente: string;
   commessa: string;
   lunghezza: number;
-  posizione: string | null;
+  posizione: string | null; // Manteniamo per compatibilità log o visualizzazione rapida
+  fila: string | null;
+  offsetInizio: number | null;
   colore: string;
   stato: 'CREATA' | 'IN_AREA' | 'SPEDITA';
   dataCreazione: string;
@@ -37,8 +39,8 @@ interface LogEntry {
 
 interface GridConfig {
   rows: string[];
-  cols: number[];
-  slotLength: number;
+  totalLength: number; // Lunghezza totale della fila in metri
+  pixelsPerMeter: number; // Fattore di scala per la visualizzazione
 }
 
 /**
@@ -46,8 +48,8 @@ interface GridConfig {
  */
 const GRID_CONFIG: GridConfig = {
   rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
-  cols: Array.from({ length: 10 }, (_, i) => i + 1),
-  slotLength: 2
+  totalLength: 30, // Ogni fila è lunga 30 metri
+  pixelsPerMeter: 40 // Ogni metro = 40px a schermo
 };
 
 const TANK_COLORS = [
@@ -239,42 +241,26 @@ const LogiTrackVasche = () => {
   }, [currentUser]);
 
   // --- Grid Logic ---
-  const getOccupiedCells = useCallback((posizione: string | null, lunghezza: number) => {
-    if (!posizione) return [];
-    const match = posizione.match(/([A-Z])(\d+)/);
-    if (!match) return [];
-    const [, row, colStr] = match;
-    const startCol = parseInt(colStr);
-    const numCells = Math.ceil(lunghezza / GRID_CONFIG.slotLength);
-    const cells = [];
-    for (let i = 0; i < numCells; i++) {
-      cells.push(`${row}${String(startCol + i).padStart(2, '0')}`);
-    }
-    return cells;
-  }, []);
-
-  const isPositionAvailable = useCallback((posizione: string, lunghezza: number, excludeId: string | null = null) => {
-    const cellsNeeded = getOccupiedCells(posizione, lunghezza);
-    if (cellsNeeded.length === 0) return { available: false, reason: 'Posizione non valida' };
-
-    const lastCell = cellsNeeded[cellsNeeded.length - 1];
-    const matchLast = lastCell.match(/([A-Z])(\d+)/);
-    if (!matchLast) return { available: false, reason: 'Errore parser' };
-
-    const lastCol = parseInt(matchLast[2]);
-    if (lastCol > GRID_CONFIG.cols.length) {
-      return { available: false, reason: 'Spazio insufficiente' };
+  const isPositionAvailable = useCallback((fila: string, offset: number, lunghezza: number, excludeId: string | null = null) => {
+    if (offset < 0 || offset + lunghezza > GRID_CONFIG.totalLength) {
+      return { available: false, reason: 'Spazio insufficiente nella fila' };
     }
 
     for (const v of vasche) {
-      if (v.id === excludeId || v.stato !== 'IN_AREA' || !v.posizione) continue;
-      const occupiedCells = getOccupiedCells(v.posizione, v.lunghezza);
-      if (cellsNeeded.some(cell => occupiedCells.includes(cell))) {
-        return { available: false, reason: `Occupata da ${v.codice}` };
+      if (v.id === excludeId || v.stato !== 'IN_AREA' || v.fila !== fila || v.offsetInizio === null) continue;
+
+      // Controllo sovrapposizione intervalli: [offset, offset + lunghezza] vs [v.offsetInizio, v.offsetInizio + v.lunghezza]
+      const start1 = offset;
+      const end1 = offset + lunghezza;
+      const start2 = v.offsetInizio;
+      const end2 = v.offsetInizio + v.lunghezza;
+
+      if (start1 < end2 && end1 > start2) {
+        return { available: false, reason: `Sovrapposizione con vasca ${v.codice}` };
       }
     }
     return { available: true };
-  }, [vasche, getOccupiedCells]);
+  }, [vasche]);
 
   // --- Computed Data ---
   const filteredVasche = useMemo(() => {
@@ -338,20 +324,22 @@ const LogiTrackVasche = () => {
     setSortConfig({ key, direction });
   };
 
-  const occupancyMap = useMemo(() => {
-    const map: Record<string, { vasca: Vasca; isFirst: boolean }> = {};
-    vasche.filter(v => v.stato === 'IN_AREA' && v.posizione).forEach(v => {
-      getOccupiedCells(v.posizione, v.lunghezza).forEach((cell, idx) => {
-        map[cell] = { vasca: v, isFirst: idx === 0 };
-      });
+  const vaschePerFila = useMemo(() => {
+    const map: Record<string, Vasca[]> = {};
+    GRID_CONFIG.rows.forEach(r => map[r] = []);
+    vasche.filter(v => v.stato === 'IN_AREA' && v.fila).forEach(v => {
+      if (v.fila) map[v.fila].push(v);
     });
     return map;
-  }, [vasche, getOccupiedCells]);
+  }, [vasche]);
 
-  const ghostCells = useMemo(() => {
-    if (!ghostPosition || !selectedVasca) return [];
-    return getOccupiedCells(ghostPosition, selectedVasca.lunghezza);
-  }, [ghostPosition, selectedVasca, getOccupiedCells]);
+  const ghostData = useMemo(() => {
+    if (!ghostPosition || !selectedVasca) return null;
+    const [fila, offsetStr] = ghostPosition.split(':');
+    const offset = parseFloat(offsetStr);
+    const isValid = isPositionAvailable(fila, offset, selectedVasca.lunghezza, selectedVasca.id).available;
+    return { fila, offset, isValid };
+  }, [ghostPosition, selectedVasca, isPositionAvailable]);
 
   // --- Handlers ---
   const handleCreateVasca = async () => {
@@ -413,7 +401,7 @@ const LogiTrackVasche = () => {
     }
   };
 
-  const moveVasca = async (vascaId: string, newPos: string | null, newState: Vasca['stato'], logType: LogEntry['tipo'], logDetails: string) => {
+  const moveVasca = async (vascaId: string, newFila: string | null, newOffset: number | null, newState: Vasca['stato'], logType: LogEntry['tipo'], logDetails: string) => {
     const vasca = vasche.find(v => v.id === vascaId);
     if (!vasca) return;
 
@@ -421,13 +409,18 @@ const LogiTrackVasche = () => {
       const res = await fetch(`http://localhost:3001/api/vasche/${vascaId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posizione: newPos, stato: newState })
+        body: JSON.stringify({
+          fila: newFila,
+          offsetInizio: newOffset,
+          stato: newState,
+          posizione: newFila ? `${newFila} @ ${newOffset?.toFixed(2)}m` : null
+        })
       });
       if (res.ok) {
         setVasche(prev => prev.map(v =>
-          v.id === vascaId ? { ...v, posizione: newPos, stato: newState } : v
+          v.id === vascaId ? { ...v, fila: newFila, offsetInizio: newOffset, stato: newState, posizione: newFila ? `${newFila} @ ${newOffset?.toFixed(2)}m` : null } : v
         ));
-        addLog(logType, { ...vasca, posizione: newPos, stato: newState }, logDetails);
+        addLog(logType, { ...vasca, fila: newFila, offsetInizio: newOffset, stato: newState }, logDetails);
         setMode('view');
         setSelectedVasca(null);
         setGhostPosition(null);
@@ -441,33 +434,33 @@ const LogiTrackVasche = () => {
     }
   };
 
-  const handlePositionVasca = (pos: string) => {
+  const handlePositionVasca = (fila: string, offset: number) => {
     if (!selectedVasca || mode !== 'position') return;
-    const check = isPositionAvailable(pos, selectedVasca.lunghezza);
+    const check = isPositionAvailable(fila, offset, selectedVasca.lunghezza);
     if (!check.available) {
       alert(`❌ ${check.reason}`);
       return;
     }
     setShowConfirmModal({
-      message: `Posizionare ${selectedVasca.codice} in ${pos}?`,
+      message: `Posizionare ${selectedVasca.codice} in Fila ${fila} a ${offset.toFixed(2)}m?`,
       onConfirm: () => {
-        moveVasca(selectedVasca.id, pos, 'IN_AREA', 'ENTRATA', `Posizionata in ${pos}`);
+        moveVasca(selectedVasca.id, fila, offset, 'IN_AREA', 'ENTRATA', `Posizionata in ${fila} @ ${offset.toFixed(2)}m`);
         setShowConfirmModal(null);
       }
     });
   };
 
-  const handleMoveVasca = (pos: string) => {
+  const handleMoveVasca = (fila: string, offset: number) => {
     if (!selectedVasca || mode !== 'move') return;
-    const check = isPositionAvailable(pos, selectedVasca.lunghezza, selectedVasca.id);
+    const check = isPositionAvailable(fila, offset, selectedVasca.lunghezza, selectedVasca.id);
     if (!check.available) {
       alert(`❌ ${check.reason}`);
       return;
     }
     setShowConfirmModal({
-      message: `Spostare ${selectedVasca.codice} da ${selectedVasca.posizione} a ${pos}?`,
+      message: `Spostare ${selectedVasca.codice} a Fila ${fila} @ ${offset.toFixed(2)}m?`,
       onConfirm: () => {
-        moveVasca(selectedVasca.id, pos, 'IN_AREA', 'MOVIMENTAZIONE', `Spostata da ${selectedVasca.posizione} a ${pos}`);
+        moveVasca(selectedVasca.id, fila, offset, 'IN_AREA', 'MOVIMENTAZIONE', `Spostata in ${fila} @ ${offset.toFixed(2)}m`);
         setShowConfirmModal(null);
       }
     });
@@ -566,21 +559,67 @@ const LogiTrackVasche = () => {
         .nav-tab { padding: 12px 4px; font-weight: 700; font-size: 15px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
         .nav-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
         
-        /* Grid Engine */
+        /* Linear Layout (Timeline) */
         .content { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
         .grid-section { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .grid-container { overflow-x: auto; padding: 10px; }
-        .grid-header { display: grid; grid-template-columns: 60px repeat(10, 60px); gap: 4px; margin-bottom: 8px; }
-        .grid-row { display: grid; grid-template-columns: 60px repeat(10, 60px); gap: 4px; margin-bottom: 4px; }
-        .cell-header { height: 40px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #1e293b; background: #f1f5f9; border-radius: 8px; }
-        .grid-cell { height: 60px; border: 2px solid #f1f5f9; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; background: white; position: relative; transition: all 0.2s ease; }
-        .grid-cell:hover { border-color: #3b82f6; transform: scale(1.02); z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .grid-cell.occupied { color: white; border-color: rgba(0,0,0,0.05); }
-        .grid-cell.ghost { background: rgba(59, 130, 246, 0.15); border: 2px dashed #3b82f6; }
-        .grid-cell.ghost.invalid { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; }
-        .grid-cell.selected { box-shadow: 0 0 0 3px #f59e0b; }
-        .grid-cell.faded { opacity: 0.35; filter: saturate(0.4); }
-        .cell-label { font-size: 10px; font-weight: 800; position: absolute; top: 6px; left: 6px; letter-spacing: 0.5px; }
+        
+        .fila-row { display: grid; grid-template-columns: 60px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 12px; }
+        .fila-label { font-weight: 800; font-size: 18px; color: #1e293b; text-align: center; }
+        
+        .fila-track { 
+          height: 60px; 
+          background: #e2e8f0; 
+          border-radius: 8px; 
+          position: relative; 
+          border: 2px solid #cbd5e1; 
+          overflow: hidden;
+          cursor: crosshair;
+        }
+        .fila-track:hover { border-color: #3b82f6; }
+        
+        .vasca-block {
+          position: absolute;
+          height: 80%;
+          top: 10%;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 800;
+          font-size: 11px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          cursor: pointer;
+          transition: transform 0.2s;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding: 0 8px;
+        }
+        .vasca-block:hover { transform: translateY(-2px); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .vasca-block.selected { border: 3px solid #f59e0b; }
+        
+        .ghost-block {
+          position: absolute;
+          height: 80%;
+          top: 10%;
+          border-radius: 6px;
+          background: rgba(59, 130, 246, 0.3);
+          border: 2px dashed #3b82f6;
+          pointer-events: none;
+        }
+        .ghost-block.invalid { background: rgba(239, 68, 68, 0.3); border-color: #ef4444; }
+        
+        .ruler {
+          display: flex;
+          justify-content: space-between;
+          padding: 0 60px 0 72px;
+          margin-bottom: 24px;
+          color: #94a3b8;
+          font-size: 10px;
+          font-weight: 700;
+        }
         
         /* Sidebar */
         .sidebar { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -801,70 +840,80 @@ const LogiTrackVasche = () => {
 
               <div className="content" style={{ position: 'relative', zIndex: 1 }}>
                 <div className="grid-section">
-                  <div className="grid-container">
-                    <div className="grid-header">
-                      <div className="cell-header"></div>
-                      {GRID_CONFIG.cols.map(c => <div key={c} className="cell-header">{String(c).padStart(2, '0')}</div>)}
-                    </div>
-                    {GRID_CONFIG.rows.map(row => (
-                      <div key={row} className="grid-row">
-                        <div className="cell-header">{row}</div>
-                        {GRID_CONFIG.cols.map(col => {
-                          const pos = `${row}${String(col).padStart(2, '0')}`;
-                          const occ = occupancyMap[pos];
-                          const isGhost = ghostCells.includes(pos);
-                          const isGhostValid = isGhost && selectedVasca && isPositionAvailable(ghostPosition!, selectedVasca.lunghezza, mode === 'move' ? selectedVasca.id : null).available;
-                          const isSelected = selectedVasca?.posizione && getOccupiedCells(selectedVasca.posizione, selectedVasca.lunghezza).includes(pos);
+                  <div className="ruler">
+                    {[0, 5, 10, 15, 20, 25, 30].map(m => <span key={m}>{m}m</span>)}
+                  </div>
 
-                          // Fading Logic
-                          const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedVasca !== null;
-                          let isFaded = false;
-                          if (isAnyFilterActive) {
-                            if (occ) {
+                  <div className="grid-container" onMouseMove={(e: any) => {
+                    if (mode === 'view') return;
+                    setMousePos({ x: e.clientX, y: e.clientY });
+                  }}>
+                    {GRID_CONFIG.rows.map(fila => (
+                      <div key={fila} className="fila-row">
+                        <div className="fila-label">{fila}</div>
+                        <div
+                          className="fila-track"
+                          style={{ width: GRID_CONFIG.totalLength * GRID_CONFIG.pixelsPerMeter }}
+                          onClick={(e: any) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const offset = (e.clientX - rect.left) / GRID_CONFIG.pixelsPerMeter;
+                            if (mode === 'position') handlePositionVasca(fila, offset);
+                            if (mode === 'move') handleMoveVasca(fila, offset);
+                          }}
+                          onMouseMove={(e: any) => {
+                            if (mode === 'view') return;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const offset = (e.clientX - rect.left) / GRID_CONFIG.pixelsPerMeter;
+                            setGhostPosition(`${fila}:${offset}`);
+                          }}
+                          onMouseLeave={() => setGhostPosition(null)}
+                        >
+                          {/* Vasche in questa fila */}
+                          {vaschePerFila[fila]?.map((v: Vasca) => {
+                            // Fading Logic
+                            const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedVasca !== null;
+                            let isFaded = false;
+                            if (isAnyFilterActive) {
                               const matchesSearch =
-                                occ.vasca.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
-                                occ.vasca.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                              const matchesSelection = selectedVasca ? occ.vasca.id === selectedVasca.id : true;
+                                v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
+                                v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+                              const matchesSelection = selectedVasca ? v.id === selectedVasca.id : true;
                               if (!(matchesSearch && matchesSelection)) isFaded = true;
-                            } else {
-                              isFaded = true;
                             }
-                          }
 
-                          return (
+                            return (
+                              <div
+                                key={v.id}
+                                className={`vasca-block ${selectedVasca?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                style={{
+                                  left: (v.offsetInizio || 0) * GRID_CONFIG.pixelsPerMeter,
+                                  width: v.lunghezza * GRID_CONFIG.pixelsPerMeter,
+                                  backgroundColor: v.colore,
+                                  opacity: isFaded ? 0.35 : 1
+                                }}
+                                onClick={(e: any) => {
+                                  e.stopPropagation();
+                                  setSelectedVasca(v);
+                                }}
+                                onMouseEnter={() => setHoveredVasca(v)}
+                                onMouseLeave={() => setHoveredVasca(null)}
+                              >
+                                {v.codice}
+                              </div>
+                            );
+                          })}
+
+                          {/* Ghost Vasca (Preview posizionamento) */}
+                          {ghostData && ghostData.fila === fila && (
                             <div
-                              key={pos}
-                              className={`grid-cell ${occ ? 'occupied' : ''} ${isGhost ? (isGhostValid ? 'ghost' : 'ghost invalid') : ''} ${isSelected ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
-                              style={occ ? { backgroundColor: occ.vasca.colore } : {}}
-                              onClick={() => {
-                                if (!occ) {
-                                  if (mode === 'position') handlePositionVasca(pos);
-                                  else if (mode === 'move') handleMoveVasca(pos);
-                                } else if (occ && mode === 'view') {
-                                  setSelectedVasca(occ.vasca);
-                                }
+                              className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
+                              style={{
+                                left: ghostData.offset * GRID_CONFIG.pixelsPerMeter,
+                                width: selectedVasca!.lunghezza * GRID_CONFIG.pixelsPerMeter
                               }}
-                              onMouseEnter={(e) => {
-                                if (mode !== 'view') {
-                                  selectedVasca && setGhostPosition(pos);
-                                } else if (occ) {
-                                  setHoveredVasca(occ.vasca);
-                                  setMousePos({ x: e.clientX, y: e.clientY });
-                                }
-                              }}
-                              onMouseMove={(e) => {
-                                if (occ && mode === 'view') setMousePos({ x: e.clientX, y: e.clientY });
-                              }}
-                              onMouseLeave={() => {
-                                setGhostPosition(null);
-                                setHoveredVasca(null);
-                              }}
-                            >
-                              {occ?.isFirst && <div className="cell-label">{occ.vasca.codice}</div>}
-                              {!occ && !isGhost && <div style={{ fontSize: '9px', color: '#cbd5e1' }}>{pos}</div>}
-                            </div>
-                          );
-                        })}
+                            />
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
