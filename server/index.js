@@ -68,9 +68,9 @@ app.delete('/api/utenti/:id', (req, res) => {
 
 // --- API VASCHE ---
 
-// Get all vasche
-app.get('/api/vasche', (req, res) => {
-    db.all("SELECT * FROM vasche", [], (err, rows) => {
+// Get all articoli
+app.get('/api/articoli', (req, res) => {
+    db.all("SELECT * FROM articoli", [], (err, rows) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -84,6 +84,9 @@ app.get('/api/vasche', (req, res) => {
             posizione: row.posizione,
             fila: row.fila,
             offsetInizio: row.offset_inizio,
+            tipo: row.tipo,
+            livello: row.livello,
+            dimBase: row.dim_base,
             colore: row.colore,
             stato: row.stato,
             dataCreazione: row.data_creazione
@@ -91,42 +94,59 @@ app.get('/api/vasche', (req, res) => {
     });
 });
 
-// Create a new vasca
-app.post('/api/vasche', (req, res) => {
-    const { id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione } = req.body;
+// Create a new articolo
+app.post('/api/articoli', (req, res) => {
+    console.log('Ricevuta richiesta creazione articolo:', req.body);
+    const { id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello, dimBase } = req.body;
+
+    if (!codice) {
+        console.error('Errore: codice mancante nella richiesta!');
+        return res.status(400).json({ error: 'Codice mancante' });
+    }
 
     // Check if codice already exists
-    db.get("SELECT id FROM vasche WHERE codice = ?", [codice], (err, row) => {
+    db.get("SELECT id FROM articoli WHERE codice = ?", [codice], (err, row) => {
         if (err) {
+            console.error('Errore query esistenza codice:', err.message);
             res.status(500).json({ error: err.message });
             return;
         }
         if (row) {
-            res.status(409).json({ error: `Il codice vasca '${codice}' esiste già.` });
+            console.warn(`Tentativo creazione codice duplicato: ${codice}`);
+            res.status(409).json({ error: `Il codice '${codice}' esiste già.` });
             return;
         }
 
-        const sql = `INSERT INTO vasche (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, colore, stato, data_creazione) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        const params = [id, codice, cliente, commessa, lunghezza, null, null, null, colore, stato, dataCreazione];
+        const sql = `INSERT INTO articoli (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, dim_base, colore, stato, data_creazione) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const params = [
+            id, codice, cliente, commessa, lunghezza,
+            null, fila || null, offsetInizio || null,
+            tipo || 'VASCA', livello || 1, dimBase || null,
+            colore, stato, dataCreazione
+        ];
+
+        console.log('Eseguo INSERT con params:', params);
 
         db.run(sql, params, function (err) {
             if (err) {
+                console.error('Errore durante INSERT articolo:', err.message);
                 res.status(500).json({ error: err.message });
                 return;
             }
-            res.status(201).json({ id: id, message: 'Vasca creata correttamente' });
+            console.log('Articolo creato con successo, ID:', id);
+            res.status(201).json({ id: id, message: 'Elemento creato correttamente' });
         });
     });
 });
 
-// Update a vasca (position, state, etc)
-app.put('/api/vasche/:id', (req, res) => {
+// Update an articolo (position, state, livello, etc)
+app.put('/api/articoli/:id', (req, res) => {
     const { id } = req.params;
-    const { posizione, fila, offsetInizio, stato } = req.body;
+    const { posizione, fila, offsetInizio, stato, livello } = req.body;
 
     // Build dynamic update query
-    let sql = 'UPDATE vasche SET ';
+    let sql = 'UPDATE articoli SET ';
     let params = [];
 
     if (posizione !== undefined) {
@@ -145,6 +165,10 @@ app.put('/api/vasche/:id', (req, res) => {
         sql += 'offset_inizio = ?, ';
         params.push(offsetInizio);
     }
+    if (livello !== undefined) {
+        sql += 'livello = ?, ';
+        params.push(livello);
+    }
 
     sql = sql.slice(0, -2); // Remove last comma
     sql += ' WHERE id = ?';
@@ -155,14 +179,14 @@ app.put('/api/vasche/:id', (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        res.json({ message: 'Vasca aggiornata correttamente' });
+        res.json({ message: 'Elemento aggiornato correttamente' });
     });
 });
 
 // Delete a vasca
-app.delete('/api/vasche/:id', (req, res) => {
+app.delete('/api/articoli/:id', (req, res) => {
     const { id } = req.params;
-    db.run('DELETE FROM vasche WHERE id = ?', id, function (err) {
+    db.run('DELETE FROM articoli WHERE id = ?', id, function (err) {
         if (err) {
             res.status(500).json({ error: err.message });
             return;

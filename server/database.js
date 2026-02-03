@@ -30,8 +30,8 @@ function initializeSchema() {
             }
         });
 
-        // Tabella Vasche
-        db.run(`CREATE TABLE IF NOT EXISTS vasche (
+        // Tabella Articoli (Ex Vasche)
+        db.run(`CREATE TABLE IF NOT EXISTS articoli (
       id TEXT PRIMARY KEY,
       codice TEXT UNIQUE NOT NULL,
       cliente TEXT NOT NULL,
@@ -40,6 +40,9 @@ function initializeSchema() {
       posizione TEXT,
       fila TEXT,
       offset_inizio REAL,
+      tipo TEXT NOT NULL DEFAULT 'VASCA',
+      livello INTEGER DEFAULT 1,
+      dim_base INTEGER,
       colore TEXT NOT NULL,
       stato TEXT NOT NULL,
       data_creazione TEXT NOT NULL
@@ -55,7 +58,7 @@ function initializeSchema() {
       dettagli TEXT,
       utente_nome TEXT,
       timestamp INTEGER NOT NULL,
-      FOREIGN KEY (vasca_id) REFERENCES vasche (id)
+      FOREIGN KEY (vasca_id) REFERENCES articoli (id)
     )`);
 
         console.log('Schema del database inizializzato.');
