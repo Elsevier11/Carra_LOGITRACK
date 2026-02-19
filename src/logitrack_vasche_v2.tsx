@@ -23,7 +23,7 @@ interface Articolo {
   posizione: string | null;
   fila: string | null;
   offsetInizio: number | null;
-  tipo: 'VASCA' | 'POZZETTO' | 'COPERCHIO';
+  tipo: 'VASCA' | 'POZZETTO' | 'SOLETTA';
   livello: number;
   dimBase?: number;
   colore: string;
@@ -53,26 +53,51 @@ interface GridConfig {
   rows: string[];
   verticalRows?: string[];
   totalLength: number; // Lunghezza totale della fila in metri
+  rowLengths?: Record<string, number>; // Lunghezza specifica per fila in metri
   pixelsPerMeter: number; // Fattore di scala per la visualizzazione
+}
+
+interface SolettaRelocationFlow {
+  target: Articolo;
+  blockers: Articolo[];
+  currentIndex: number;
+  finalAction: 'ship' | 'move';
+  destinationPile?: string;
 }
 
 /**
  * CONSTANTS
  */
-const GRID_CONFIGS: Record<'VASCA' | 'POZZETTO' | 'COPERCHIO', GridConfig> = {
+const SOLETTA_PILES = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
+const SOLETTA_MAX_LEVELS = 10;
+const SOLETTA_LEVEL_HEIGHT_PX = 20;
+
+const GRID_CONFIGS: Record<'VASCA' | 'POZZETTO' | 'SOLETTA', GridConfig> = {
   VASCA: {
-    rows: ['A', 'B', 'C', 'D'],
-    verticalRows: ['V1', 'V2'],
-    totalLength: 30,
-    pixelsPerMeter: 40
+    rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'L', 'M'],
+    totalLength: 63.38,
+    rowLengths: {
+      A: 63.38,
+      B: 63.38,
+      C: 63.38,
+      D: 63.38,
+      E: 37.22,
+      F: 37.22,
+      G: 37.22,
+      H: 37.22,
+      I: 37.22,
+      L: 48.78,
+      M: 48.78
+    },
+    pixelsPerMeter: 8
   },
   POZZETTO: {
     rows: ['Frontale', 'Posteriore'],
     totalLength: 10,
     pixelsPerMeter: 60
   },
-  COPERCHIO: {
-    rows: ['Area Coperchi'],
+  SOLETTA: {
+    rows: SOLETTA_PILES,
     totalLength: 10,
     pixelsPerMeter: 100
   }
@@ -122,7 +147,7 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
         <span className="tooltip-value">{vasca.dimBase}x{vasca.dimBase}</span>
       </div>
     )}
-    {(vasca.tipo === 'POZZETTO' || vasca.tipo === 'COPERCHIO') && (
+    {(vasca.tipo === 'POZZETTO' || vasca.tipo === 'SOLETTA') && (
       <div className="tooltip-row">
         <span className="tooltip-label">Livello:</span>
         <span className="tooltip-value">{vasca.livello}</span>
@@ -137,7 +162,7 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
 const LogiTrackVasche = () => {
   // --- States ---
   const [articoli, setArticoli] = useState<Articolo[]>([]);
-  const [currentCategory, setCurrentCategory] = useState<'VASCA' | 'POZZETTO' | 'COPERCHIO'>('VASCA');
+  const [currentCategory, setCurrentCategory] = useState<'VASCA' | 'POZZETTO' | 'SOLETTA'>('VASCA');
 
   const currentGridConfig = useMemo(() => GRID_CONFIGS[currentCategory], [currentCategory]);
   const [registro, setRegistro] = useState<LogEntry[]>([]);
@@ -161,6 +186,72 @@ const LogiTrackVasche = () => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
+  const [solettaRelocationFlow, setSolettaRelocationFlow] = useState<SolettaRelocationFlow | null>(null);
+  const normalizeTipo = useCallback((tipo: string): Articolo['tipo'] => {
+    if (tipo === 'COPERCHIO') return 'SOLETTA';
+    return tipo as Articolo['tipo'];
+  }, []);
+  const normalizeSolettaStacks = useCallback((items: Articolo[]) => {
+    const normalized = [...items];
+    const byPile: Record<string, Articolo[]> = {};
+
+    normalized.forEach(item => {
+      if (item.tipo !== 'SOLETTA' || item.stato !== 'IN_AREA' || !item.fila) return;
+      if (!byPile[item.fila]) byPile[item.fila] = [];
+      byPile[item.fila].push(item);
+    });
+
+    Object.entries(byPile).forEach(([pile, stack]) => {
+      stack
+        .sort((a, b) => {
+          if (a.livello !== b.livello) return a.livello - b.livello;
+          return (a.dataCreazione || '').localeCompare(b.dataCreazione || '');
+        })
+        .forEach((item, index) => {
+          const targetLevel = index + 1;
+          if (item.livello !== targetLevel || item.offsetInizio !== 0 || item.posizione !== `${pile} @ Pila (L${targetLevel})`) {
+            const idx = normalized.findIndex(n => n.id === item.id);
+            if (idx !== -1) {
+              normalized[idx] = {
+                ...normalized[idx],
+                livello: targetLevel,
+                offsetInizio: 0,
+                posizione: `${pile} @ Pila (L${targetLevel})`
+              };
+            }
+          }
+        });
+    });
+
+    return normalized;
+  }, []);
+  const getFilaLength = useCallback((fila: string) => {
+    return currentGridConfig.rowLengths?.[fila] ?? currentGridConfig.totalLength;
+  }, [currentGridConfig]);
+  const maxGridLength = useMemo(() => {
+    const lengths = Object.values(currentGridConfig.rowLengths || {});
+    return lengths.length > 0 ? Math.max(...lengths) : currentGridConfig.totalLength;
+  }, [currentGridConfig]);
+  const rulerStep = useMemo(() => {
+    if (maxGridLength > 30) return 5;
+    if (maxGridLength > 10) return 2;
+    return 1;
+  }, [maxGridLength]);
+  const isScaledVascaLayout = currentCategory === 'VASCA' && !!currentGridConfig.rowLengths;
+  const computeOffsetFromPointer = useCallback((fila: string, x: number, rectWidth: number) => {
+    if (currentCategory === 'POZZETTO') {
+      let offset = Math.ceil(x / currentGridConfig.pixelsPerMeter);
+      if (offset < 1) offset = 1;
+      if (offset > 10) offset = 10;
+      return offset;
+    }
+    if (currentCategory === 'SOLETTA') return 0;
+    if (isScaledVascaLayout) {
+      const filaLength = getFilaLength(fila);
+      return (x / rectWidth) * filaLength;
+    }
+    return x / currentGridConfig.pixelsPerMeter;
+  }, [currentCategory, currentGridConfig.pixelsPerMeter, getFilaLength, isScaledVascaLayout]);
 
   // --- Persistence (API) ---
   useEffect(() => {
@@ -172,7 +263,28 @@ const LogiTrackVasche = () => {
         ]);
         const dataVasche = await resVasche.json();
         const dataRegistro = await resRegistro.json();
-        setArticoli(dataVasche);
+        const mappedVasche: Articolo[] = dataVasche.map((v: any) => ({ ...v, tipo: normalizeTipo(v.tipo) }));
+        const normalizedVasche = normalizeSolettaStacks(mappedVasche);
+        setArticoli(normalizedVasche);
+
+        const relevelUpdates = normalizedVasche.filter((v, i) => {
+          const original = mappedVasche[i];
+          return original && (
+            original.livello !== v.livello ||
+            original.offsetInizio !== v.offsetInizio ||
+            original.posizione !== v.posizione
+          );
+        });
+
+        if (relevelUpdates.length > 0) {
+          Promise.all(relevelUpdates.map(v =>
+            fetch(`http://127.0.0.1:3001/api/articoli/${v.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ livello: v.livello, offsetInizio: v.offsetInizio, posizione: v.posizione })
+            }).catch(() => null)
+          ));
+        }
         setRegistro(dataRegistro);
       } catch (err) {
         console.error('Errore nel caricamento dati dal backend:', err);
@@ -182,7 +294,7 @@ const LogiTrackVasche = () => {
       fetchData();
       if (currentUser.ruolo === 'ADMIN') fetchUtenti();
     }
-  }, [currentUser]);
+  }, [currentUser, normalizeTipo, normalizeSolettaStacks]);
 
   const fetchUtenti = async () => {
     try {
@@ -283,8 +395,13 @@ const LogiTrackVasche = () => {
 
   // --- Grid Logic ---
   const isPositionAvailable = useCallback((fila: string, offset: number, lunghezza: number, excludeId: string | null = null, tipo: Articolo['tipo'] = 'VASCA') => {
-    if (tipo !== 'POZZETTO') {
-      if (offset < 0 || offset + lunghezza > currentGridConfig.totalLength) {
+    if (tipo === 'SOLETTA') {
+      if (offset !== 0) {
+        return { available: false, reason: 'Le solette possono essere posizionate solo in pila' };
+      }
+    } else if (tipo !== 'POZZETTO') {
+      const filaLength = getFilaLength(fila);
+      if (offset < 0 || offset + lunghezza > filaLength) {
         return { available: false, reason: 'Spazio insufficiente nella fila' };
       }
     } else {
@@ -295,10 +412,16 @@ const LogiTrackVasche = () => {
     }
 
     let topLevel = 0;
-    const isStackable = tipo === 'POZZETTO' || tipo === 'COPERCHIO';
+    let solettaCountInPile = 0;
+    const isStackable = tipo === 'POZZETTO' || tipo === 'SOLETTA';
 
     for (const v of articoli) {
       if (v.id === excludeId || v.stato !== 'IN_AREA' || v.fila !== fila || v.offsetInizio === null) continue;
+
+      if (tipo === 'SOLETTA' && v.tipo === 'SOLETTA') {
+        solettaCountInPile += 1;
+        continue;
+      }
 
       if (tipo === 'POZZETTO' && v.tipo === 'POZZETTO') {
         if (Math.abs(v.offsetInizio - offset) < 0.1) {
@@ -314,9 +437,9 @@ const LogiTrackVasche = () => {
 
       // Se coincidono esattamente (tolleranza 0.1m)
       const exactMatch = Math.abs(start1 - start2) < 0.1 && Math.abs(lunghezza - v.lunghezza) < 0.1;
-      const coperchioStack = tipo === 'COPERCHIO' && v.tipo === 'COPERCHIO' && Math.abs(start1 - start2) < 0.1;
+      const solettaStack = tipo === 'SOLETTA' && v.tipo === 'SOLETTA' && Math.abs(start1 - start2) < 0.1;
 
-      if ((exactMatch || coperchioStack) && isStackable) {
+      if ((exactMatch || solettaStack) && isStackable) {
         topLevel = Math.max(topLevel, v.livello);
         continue;
       }
@@ -330,9 +453,15 @@ const LogiTrackVasche = () => {
     if (tipo === 'POZZETTO' && topLevel >= 4) {
       return { available: false, reason: 'Altezza massima raggiunta (4 livelli)' };
     }
+    if (tipo === 'SOLETTA' && solettaCountInPile >= SOLETTA_MAX_LEVELS) {
+      return { available: false, reason: `Pila piena: massimo ${SOLETTA_MAX_LEVELS} solette` };
+    }
+    if (tipo === 'SOLETTA') {
+      return { available: true, nextLevel: solettaCountInPile + 1 };
+    }
 
     return { available: true, nextLevel: topLevel + 1 };
-  }, [articoli, currentGridConfig]);
+  }, [articoli, currentGridConfig, getFilaLength]);
 
   // --- Computed Data ---
   const filteredVasche = useMemo(() => {
@@ -505,14 +634,14 @@ const LogiTrackVasche = () => {
   };
 
   const applyGravity = async (fila: string, offset: number) => {
-    // Ricalcola i livelli per gli articoli rimasti in una pila (Pozzetti/Coperchi)
+    // Ricalcola i livelli per gli articoli rimasti in una pila (Pozzetti/Solette)
     setArticoli(currentArticoli => {
       const pile = currentArticoli
         .filter((v: Articolo) => v.stato === 'IN_AREA' && v.fila === fila && Math.abs((v.offsetInizio || 0) - offset) < 0.1)
         .sort((a: Articolo, b: Articolo) => a.livello - b.livello);
 
       const updates: Articolo[] = [];
-      const newArticoli = currentArticoli.map((v: Articolo) => {
+        const newArticoli = currentArticoli.map((v: Articolo) => {
         const indexInPile = pile.findIndex(p => p.id === v.id);
         if (indexInPile !== -1) {
           const expectedLevel = indexInPile + 1;
@@ -520,7 +649,11 @@ const LogiTrackVasche = () => {
             const updated = {
               ...v,
               livello: expectedLevel,
-              posizione: v.tipo === 'POZZETTO' ? `${fila} @ Slot ${offset} (H${expectedLevel})` : `${fila} @ ${offset.toFixed(2)}m (L${expectedLevel})`
+              posizione: v.tipo === 'POZZETTO'
+                ? `${fila} @ Slot ${offset} (H${expectedLevel})`
+                : v.tipo === 'SOLETTA'
+                  ? `${fila} @ Pila (L${expectedLevel})`
+                  : `${fila} @ ${offset.toFixed(2)}m (L${expectedLevel})`
             };
             updates.push(updated);
             return updated;
@@ -553,9 +686,18 @@ const LogiTrackVasche = () => {
     });
   };
 
-  const moveArticolo = async (vascaId: string, newFila: string | null, newOffset: number | null, newState: Articolo['stato'], logType: LogEntry['tipo'], logDetails: string, newLevel: number = 1) => {
+  const moveArticolo = async (
+    vascaId: string,
+    newFila: string | null,
+    newOffset: number | null,
+    newState: Articolo['stato'],
+    logType: LogEntry['tipo'],
+    logDetails: string,
+    newLevel: number = 1,
+    options?: { preserveUi?: boolean }
+  ) => {
     const vasca = articoli.find(v => v.id === vascaId);
-    if (!vasca) return;
+    if (!vasca) return false;
 
     try {
       const res = await fetch(`http://127.0.0.1:3001/api/articoli/${vascaId}`, {
@@ -566,28 +708,57 @@ const LogiTrackVasche = () => {
           offsetInizio: newOffset,
           stato: newState,
           livello: newLevel,
-          posizione: newFila ? (vasca?.tipo === 'POZZETTO' ? `${newFila} @ Slot ${newOffset} (H${newLevel})` : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`) : null
+          posizione: newFila
+            ? (vasca?.tipo === 'POZZETTO'
+              ? `${newFila} @ Slot ${newOffset} (H${newLevel})`
+              : vasca?.tipo === 'SOLETTA'
+                ? `${newFila} @ Pila (L${newLevel})`
+                : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`)
+            : null
         })
       });
       if (res.ok) {
         setArticoli(prev => (prev as Articolo[]).map(v =>
-          v.id === vascaId ? { ...v, fila: newFila, offsetInizio: newOffset, stato: newState, livello: newLevel, posizione: newFila ? (v.tipo === 'POZZETTO' ? `${newFila} @ Slot ${newOffset} (H${newLevel})` : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`) : null } : v
+          v.id === vascaId
+            ? {
+              ...v,
+              fila: newFila,
+              offsetInizio: newOffset,
+              stato: newState,
+              livello: newLevel,
+              posizione: newFila
+                ? (v.tipo === 'POZZETTO'
+                  ? `${newFila} @ Slot ${newOffset} (H${newLevel})`
+                  : v.tipo === 'SOLETTA'
+                    ? `${newFila} @ Pila (L${newLevel})`
+                    : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`)
+                : null
+            }
+            : v
         ));
         addLog(logType, { ...vasca, fila: newFila, offsetInizio: newOffset, stato: newState }, logDetails);
         if (vasca.fila && vasca.offsetInizio !== null) {
           applyGravity(vasca.fila, vasca.offsetInizio);
         }
+        if (vasca.tipo === 'SOLETTA' && newFila) {
+          applyGravity(newFila, 0);
+        }
 
-        setMode('view');
-        setSelectedArticolo(null);
-        setGhostPosition(null);
+        if (!options?.preserveUi) {
+          setMode('view');
+          setSelectedArticolo(null);
+          setGhostPosition(null);
+        }
+        return true;
       } else {
         console.error('Failed to move vasca:', await res.text());
         alert('Errore nello spostamento della vasca.');
+        return false;
       }
     } catch (err) {
       console.error('Errore nello spostamento della vasca:', err);
       alert('Errore di rete o del server.');
+      return false;
     }
   };
 
@@ -603,7 +774,9 @@ const LogiTrackVasche = () => {
     const nextLevel = (check as any).nextLevel || 1;
     const posLabel = selectedArticolo.tipo === 'POZZETTO'
       ? `Slot ${offset} (H${nextLevel})`
-      : `${offset.toFixed(2)}m (L${nextLevel})`;
+      : selectedArticolo.tipo === 'SOLETTA'
+        ? `Pila ${fila} (L${nextLevel})`
+        : `${offset.toFixed(2)}m (L${nextLevel})`;
 
     setShowConfirmModal({
       message: `Posizionare ${selectedArticolo.codice} in Fila ${fila} a ${posLabel}?`,
@@ -616,6 +789,13 @@ const LogiTrackVasche = () => {
 
   const handleMoveArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'move') return;
+    if (selectedArticolo.tipo === 'SOLETTA') {
+      const blockers = getSolettaBlockers(selectedArticolo);
+      if (blockers.length > 0) {
+        startSolettaRelocationFlow(selectedArticolo, 'move', fila);
+        return;
+      }
+    }
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
     if (!check.available) {
       alert(`❌ ${check.reason}`);
@@ -624,7 +804,9 @@ const LogiTrackVasche = () => {
     const nextLevel = (check as any).nextLevel || 1;
     const posLabel = selectedArticolo.tipo === 'POZZETTO'
       ? `Slot ${offset} (H${nextLevel})`
-      : `${offset.toFixed(2)}m (L${nextLevel})`;
+      : selectedArticolo.tipo === 'SOLETTA'
+        ? `Pila ${fila} (L${nextLevel})`
+        : `${offset.toFixed(2)}m (L${nextLevel})`;
 
     setShowConfirmModal({
       message: `Spostare ${selectedArticolo.codice} a Fila ${fila} @ ${posLabel}?`,
@@ -635,9 +817,117 @@ const LogiTrackVasche = () => {
     });
   };
 
+  const getSolettaBlockers = (target: Articolo) => {
+    return articoli
+      .filter(v =>
+        v.tipo === 'SOLETTA' &&
+        v.stato === 'IN_AREA' &&
+        v.id !== target.id &&
+        v.fila === target.fila &&
+        v.offsetInizio !== null &&
+        target.offsetInizio !== null &&
+        Math.abs(v.offsetInizio - target.offsetInizio) < 0.1 &&
+        v.livello > target.livello
+      )
+      .sort((a, b) => b.livello - a.livello);
+  };
+
+  const startSolettaRelocationFlow = (target: Articolo, finalAction: 'ship' | 'move', destinationPile?: string) => {
+    const blockers = getSolettaBlockers(target);
+
+    if (blockers.length === 0) {
+      if (finalAction === 'ship') {
+        setShowConfirmModal({
+          message: `Scaricare ${target.codice}? Le piazzole saranno liberate.`,
+          onConfirm: () => {
+            executeShipArticolo(target);
+            setShowConfirmModal(null);
+          }
+        });
+      }
+      return;
+    }
+
+    setSolettaRelocationFlow({
+      target,
+      blockers,
+      currentIndex: 0,
+      finalAction,
+      destinationPile
+    });
+  };
+
+  const handleSolettaRelocation = async (destinationPile: string) => {
+    if (!solettaRelocationFlow) return;
+    const current = solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex];
+    if (!current) return;
+
+    if (current.fila === destinationPile) {
+      alert('Seleziona una pila diversa da quella corrente');
+      return;
+    }
+
+    const check = isPositionAvailable(destinationPile, 0, current.lunghezza, current.id, 'SOLETTA');
+    if (!check.available) {
+      alert(`❌ ${check.reason}`);
+      return;
+    }
+
+    const nextLevel = (check as any).nextLevel || 1;
+    const moved = await moveArticolo(
+      current.id,
+      destinationPile,
+      0,
+      'IN_AREA',
+      'MOVIMENTAZIONE',
+      `Riposizionata in pila ${destinationPile} (L${nextLevel})`,
+      nextLevel,
+      { preserveUi: true }
+    );
+
+    if (!moved) return;
+
+    const isLast = solettaRelocationFlow.currentIndex >= solettaRelocationFlow.blockers.length - 1;
+    if (isLast) {
+      const target = solettaRelocationFlow.target;
+      const finalAction = solettaRelocationFlow.finalAction;
+      const destinationPile = solettaRelocationFlow.destinationPile;
+      setSolettaRelocationFlow(null);
+      if (finalAction === 'ship') {
+        setShowConfirmModal({
+          message: `Riposizionamento completato. Scaricare ${target.codice}?`,
+          onConfirm: () => {
+            executeShipArticolo(target);
+            setShowConfirmModal(null);
+          }
+        });
+      } else if (finalAction === 'move' && destinationPile) {
+        const targetNow = articoli.find(v => v.id === target.id) || target;
+        const targetCheck = isPositionAvailable(destinationPile, 0, targetNow.lunghezza, targetNow.id, 'SOLETTA');
+        if (!targetCheck.available) {
+          alert(`❌ ${targetCheck.reason}`);
+          return;
+        }
+        const targetLevel = (targetCheck as any).nextLevel || 1;
+        await moveArticolo(
+          targetNow.id,
+          destinationPile,
+          0,
+          'IN_AREA',
+          'MOVIMENTAZIONE',
+          `Spostata in pila ${destinationPile} (L${targetLevel})`,
+          targetLevel
+        );
+      }
+      return;
+    }
+
+    setSolettaRelocationFlow(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1 } : prev);
+  };
+
   const executeShipArticolo = async (vasca: Articolo) => {
-    // LIFO check for POZZETTO and COPERCHIO
-    if (vasca.tipo === 'POZZETTO' || vasca.tipo === 'COPERCHIO') {
+    // LIFO check for POZZETTO and SOLETTA
+    if (vasca.tipo === 'POZZETTO' || vasca.tipo === 'SOLETTA') {
       const itemAbove = articoli.find(v =>
         v.stato === 'IN_AREA' &&
         v.fila === vasca.fila &&
@@ -679,6 +969,10 @@ const LogiTrackVasche = () => {
   };
 
   const handleScaricaArticolo = (v: Articolo) => {
+    if (v.tipo === 'SOLETTA' && v.stato === 'IN_AREA') {
+      startSolettaRelocationFlow(v, 'ship');
+      return;
+    }
     setShowConfirmModal({
       message: `Scaricare ${v.codice}? Le piazzole saranno liberate.`,
       onConfirm: () => {
@@ -862,7 +1156,7 @@ const LogiTrackVasche = () => {
         .product-tab.active { background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .product-tab.active.vasca { color: #3b82f6; }
         .product-tab.active.pozzetto { color: #10b981; }
-        .product-tab.active.coperchio { color: #f59e0b; }
+        .product-tab.active.soletta { color: #f59e0b; }
         
         .faded { opacity: 0.25; filter: grayscale(0.5); }
       `}</style>
@@ -920,7 +1214,7 @@ const LogiTrackVasche = () => {
               </div>
 
               <div className="product-tabs">
-                {(['VASCA', 'POZZETTO', 'COPERCHIO'] as const).map(cat => (
+                {(['VASCA', 'POZZETTO', 'SOLETTA'] as const).map(cat => (
                   <div
                     key={cat}
                     className={`product-tab ${currentCategory === cat ? 'active' : ''} ${cat.toLowerCase()}`}
@@ -1063,11 +1357,19 @@ const LogiTrackVasche = () => {
 
               <div className="content" style={{ position: 'relative', zIndex: 1 }}>
                 <div className="grid-section">
-                  <div className="ruler">
-                    {Array.from({ length: Math.floor(currentGridConfig.totalLength / 5) + 1 }).map((_, i) => (
-                      <span key={i}>{i * 5}m</span>
-                    ))}
-                  </div>
+                  {currentCategory === 'SOLETTA' ? (
+                    <div className="ruler" style={{ justifyContent: 'space-between' }}>
+                      <span>Pile affiancate: 12</span>
+                      <span>Altezza singola soletta: 20 cm</span>
+                      <span>Capienza: 10 per pila</span>
+                    </div>
+                  ) : (
+                    <div className="ruler">
+                      {Array.from({ length: Math.floor(maxGridLength / rulerStep) + 1 }).map((_, i) => (
+                        <span key={i}>{i * rulerStep}m</span>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="grid-container" onMouseMove={(e: React.MouseEvent) => {
                     if (mode === 'view') return;
@@ -1159,218 +1461,265 @@ const LogiTrackVasche = () => {
                         </div>
                       )}
 
-                      {/* --- SEZIONE ORIZZONTALE (A, B, C, D ecc.) --- */}
+                      {/* --- SEZIONE ORIZZONTALE / SOLETTE --- */}
                       <div className="horizontal-tracks-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {currentGridConfig.rows.map((fila: string) => (
-                          <div key={fila} className="fila-row">
-                            <div className="fila-label">{fila}</div>
-                            <div
-                              className="fila-track"
-                              style={{
-                                width: currentGridConfig.totalLength * currentGridConfig.pixelsPerMeter,
-                                height: currentCategory === 'POZZETTO' ? '160px' : currentCategory === 'COPERCHIO' ? '80px' : '60px',
-                                background: currentCategory === 'POZZETTO' ? 'transparent' : '#f8fafc',
-                                position: 'relative'
-                              }}
-                              onClick={(e: any) => {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const x = e.clientX - rect.left;
-                                let offset;
-                                if (currentCategory === 'POZZETTO') {
-                                  offset = Math.ceil(x / currentGridConfig.pixelsPerMeter);
-                                  if (offset < 1) offset = 1;
-                                  if (offset > 10) offset = 10;
-                                } else if (currentCategory === 'COPERCHIO') {
-                                  offset = 0;
-                                } else {
-                                  offset = x / currentGridConfig.pixelsPerMeter;
-                                }
-                                if (mode === 'position') handlePositionArticolo(fila, offset);
-                                if (mode === 'move') handleMoveArticolo(fila, offset);
-                              }}
-                              onMouseMove={(e: any) => {
-                                if (mode === 'view') return;
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const x = e.clientX - rect.left;
-                                let offset;
-                                if (currentCategory === 'POZZETTO') {
-                                  offset = Math.ceil(x / currentGridConfig.pixelsPerMeter);
-                                  if (offset < 1) offset = 1;
-                                  if (offset > 10) offset = 10;
-                                } else if (currentCategory === 'COPERCHIO') {
-                                  offset = 0;
-                                } else {
-                                  offset = x / currentGridConfig.pixelsPerMeter;
-                                }
-                                setGhostPosition(`${fila}:${offset}`);
-                              }}
-                              onMouseLeave={() => setGhostPosition(null)}
-                            >
-                              {/* Griglia discretizzata per POZZETTO */}
-                              {currentCategory === 'POZZETTO' && (
-                                <>
-                                  {/* Linee Verticali (Slot 1-10) */}
-                                  {Array.from({ length: 11 }).map((_, i) => (
-                                    <div key={`v-${i}`} style={{
-                                      position: 'absolute',
-                                      left: i * currentGridConfig.pixelsPerMeter,
-                                      width: 0,
-                                      height: '100%',
-                                      borderRight: '1px dashed #cbd5e1',
-                                      pointerEvents: 'none',
-                                      zIndex: 0
-                                    }} />
-                                  ))}
-                                  {/* Linee Orizzontali (Livelli 1-4) */}
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <div key={`h-${i}`} style={{
-                                      position: 'absolute',
-                                      bottom: i * 40,
-                                      width: '100%',
-                                      height: 0,
-                                      borderTop: '1px dashed #cbd5e1',
-                                      pointerEvents: 'none',
-                                      zIndex: 0
-                                    }} />
-                                  ))}
-                                </>
-                              )}
-                              {/* Vasche in questa fila */}
-                              {articoliPerFila[fila]?.map((v: Articolo) => {
-                                // Fading Logic
-                                const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
-                                let isFaded = false;
-                                if (isAnyFilterActive) {
-                                  const matchesSearch =
-                                    v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
-                                    v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                                  const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
-                                  if (!(matchesSearch && matchesSelection)) isFaded = true;
-                                }
-
-                                if (v.tipo === 'POZZETTO') {
-                                  return (
-                                    <div
-                                      key={v.id}
-                                      className={`vasca-block pozzetto-cube ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
-                                      style={{
-                                        left: ((v.offsetInizio || 1) - 1) * currentGridConfig.pixelsPerMeter + 2,
-                                        bottom: (v.livello - 1) * 40,
-                                        width: currentGridConfig.pixelsPerMeter - 4,
-                                        height: 36,
-                                        backgroundColor: v.colore,
-                                        opacity: isFaded ? 0.35 : 1,
-                                        zIndex: 10 + (v.livello || 1),
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '11px',
-                                        fontWeight: 800,
-                                        color: '#fff',
-                                        textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-                                        borderRadius: '4px',
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                      onClick={(e: any) => {
-                                        e.stopPropagation();
-                                        setSelectedArticolo(v);
-                                      }}
-                                      onMouseEnter={() => setHoveredArticolo(v)}
-                                      onMouseLeave={() => setHoveredArticolo(null)}
-                                    >
-                                      {v.codice.slice(-4)}
-                                    </div>
-                                  );
-                                }
-
-                                if (v.tipo === 'COPERCHIO') {
-                                  const perspectiveOffset = (v.livello - 1) * 6; // 6px di sfasamento per livello
-                                  return (
-                                    <div
-                                      key={v.id}
-                                      className={`vasca-block coperchio-lasagna ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
-                                      style={{
-                                        left: (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter + perspectiveOffset,
-                                        bottom: perspectiveOffset,
-                                        width: v.lunghezza * currentGridConfig.pixelsPerMeter,
-                                        height: '34px',
-                                        backgroundColor: v.colore,
-                                        opacity: isFaded ? 0.35 : 1,
-                                        zIndex: 10 + (v.livello || 1),
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '11px',
-                                        fontWeight: 800,
-                                        color: '#fff',
-                                        boxShadow: '2px 2px 5px rgba(0,0,0,0.2)',
-                                        borderRadius: '2px',
-                                        border: '1px solid rgba(255,255,255,0.2)',
-                                        transition: 'all 0.2s ease',
-                                        cursor: 'pointer'
-                                      }}
-                                      onClick={(e: any) => {
-                                        e.stopPropagation();
-                                        setSelectedArticolo(v);
-                                      }}
-                                      onMouseEnter={() => setHoveredArticolo(v)}
-                                      onMouseLeave={() => setHoveredArticolo(null)}
-                                    >
-                                      {v.codice.slice(-6)}
-                                    </div>
-                                  );
-                                }
-
-                                return (
+                        {currentCategory === 'SOLETTA' ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(84px, 1fr))', gap: '10px', alignItems: 'end' }}>
+                            {SOLETTA_PILES.map((pile, index) => {
+                              const pileItems = [...(articoliPerFila[pile] || [])].sort((a, b) => a.livello - b.livello);
+                              const occupiedLevels = pileItems.length;
+                              return (
+                                <div key={pile} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>{index + 1}</div>
                                   <div
-                                    key={v.id}
-                                    className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                    className="fila-track"
                                     style={{
-                                      left: (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
-                                      width: v.lunghezza * currentGridConfig.pixelsPerMeter,
-                                      backgroundColor: v.colore,
-                                      opacity: isFaded ? 0.35 : 1,
-                                      transform: v.livello > 1 ? `translateY(-${(v.livello - 1) * 10}px)` : 'none',
-                                      zIndex: 10 + (v.livello || 1)
+                                      width: '100%',
+                                      height: `${SOLETTA_MAX_LEVELS * SOLETTA_LEVEL_HEIGHT_PX + 4}px`,
+                                      background: '#f8fafc',
+                                      position: 'relative'
+                                    }}
+                                    onClick={() => {
+                                      if (mode === 'position') handlePositionArticolo(pile, 0);
+                                      if (mode === 'move') handleMoveArticolo(pile, 0);
+                                    }}
+                                    onMouseMove={() => {
+                                      if (mode === 'view') return;
+                                      setGhostPosition(`${pile}:0`);
+                                    }}
+                                    onMouseLeave={() => setGhostPosition(null)}
+                                  >
+                                    {Array.from({ length: SOLETTA_MAX_LEVELS + 1 }).map((_, i) => (
+                                      <div
+                                        key={`${pile}-lv-${i}`}
+                                        style={{
+                                          position: 'absolute',
+                                          bottom: i * SOLETTA_LEVEL_HEIGHT_PX,
+                                          width: '100%',
+                                          borderTop: '1px dashed #dbe3ef',
+                                          pointerEvents: 'none'
+                                        }}
+                                      />
+                                    ))}
+
+                                    {pileItems.map((v: Articolo) => {
+                                      const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
+                                      let isFaded = false;
+                                      if (isAnyFilterActive) {
+                                        const matchesSearch =
+                                          v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
+                                          v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+                                        const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
+                                        if (!(matchesSearch && matchesSelection)) isFaded = true;
+                                      }
+
+                                      return (
+                                        <div
+                                          key={v.id}
+                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                          style={{
+                                            left: '3px',
+                                            top: 'auto',
+                                            width: 'calc(100% - 6px)',
+                                            height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
+                                            bottom: `${(v.livello - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`,
+                                            backgroundColor: v.colore,
+                                            opacity: isFaded ? 0.35 : 1,
+                                            zIndex: 10 + (v.livello || 1),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '10px',
+                                            fontWeight: 800,
+                                            color: '#fff'
+                                          }}
+                                          onClick={(e: any) => {
+                                            e.stopPropagation();
+                                            setSelectedArticolo(v);
+                                          }}
+                                          onMouseEnter={() => setHoveredArticolo(v)}
+                                          onMouseLeave={() => setHoveredArticolo(null)}
+                                        >
+                                          {v.codice.slice(-6)}
+                                        </div>
+                                      );
+                                    })}
+
+                                    {ghostData && ghostData.fila === pile && (
+                                      <div
+                                        className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
+                                        style={{
+                                          left: '3px',
+                                          top: 'auto',
+                                          width: 'calc(100% - 6px)',
+                                          height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
+                                          bottom: `${((ghostData.nextLevel || 1) - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                  <div style={{ textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{occupiedLevels}/{SOLETTA_MAX_LEVELS}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <>
+                            {currentGridConfig.rows.map((fila: string) => {
+                              const filaLength = getFilaLength(fila);
+                              return (
+                                <div key={fila} className="fila-row">
+                                  <div className="fila-label">{fila}</div>
+                                  <div
+                                    className="fila-track"
+                                    style={{
+                                      width: isScaledVascaLayout
+                                        ? `${(filaLength / maxGridLength) * 100}%`
+                                        : getFilaLength(fila) * currentGridConfig.pixelsPerMeter,
+                                      height: currentCategory === 'POZZETTO' ? '160px' : '60px',
+                                      background: currentCategory === 'POZZETTO' ? 'transparent' : '#f8fafc',
+                                      position: 'relative'
                                     }}
                                     onClick={(e: any) => {
-                                      e.stopPropagation();
-                                      setSelectedArticolo(v);
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const x = e.clientX - rect.left;
+                                      const offset = computeOffsetFromPointer(fila, x, rect.width);
+                                      if (mode === 'position') handlePositionArticolo(fila, offset);
+                                      if (mode === 'move') handleMoveArticolo(fila, offset);
                                     }}
-                                    onMouseEnter={() => setHoveredArticolo(v)}
-                                    onMouseLeave={() => setHoveredArticolo(null)}
+                                    onMouseMove={(e: any) => {
+                                      if (mode === 'view') return;
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const x = e.clientX - rect.left;
+                                      const offset = computeOffsetFromPointer(fila, x, rect.width);
+                                      setGhostPosition(`${fila}:${offset}`);
+                                    }}
+                                    onMouseLeave={() => setGhostPosition(null)}
                                   >
-                                    {v.codice} {v.livello > 1 && `(L${v.livello})`}
-                                  </div>
-                                );
-                              })}
+                                    {currentCategory === 'POZZETTO' && (
+                                      <>
+                                        {Array.from({ length: 11 }).map((_, i) => (
+                                          <div key={`v-${i}`} style={{
+                                            position: 'absolute',
+                                            left: i * currentGridConfig.pixelsPerMeter,
+                                            width: 0,
+                                            height: '100%',
+                                            borderRight: '1px dashed #cbd5e1',
+                                            pointerEvents: 'none',
+                                            zIndex: 0
+                                          }} />
+                                        ))}
+                                        {Array.from({ length: 5 }).map((_, i) => (
+                                          <div key={`h-${i}`} style={{
+                                            position: 'absolute',
+                                            bottom: i * 40,
+                                            width: '100%',
+                                            height: 0,
+                                            borderTop: '1px dashed #cbd5e1',
+                                            pointerEvents: 'none',
+                                            zIndex: 0
+                                          }} />
+                                        ))}
+                                      </>
+                                    )}
+                                    {articoliPerFila[fila]?.map((v: Articolo) => {
+                                      const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
+                                      let isFaded = false;
+                                      if (isAnyFilterActive) {
+                                        const matchesSearch =
+                                          v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
+                                          v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+                                        const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
+                                        if (!(matchesSearch && matchesSelection)) isFaded = true;
+                                      }
 
-                              {/* Ghost Articolo (Preview posizionamento) */}
-                              {ghostData && ghostData.fila === fila && (
-                                <div
-                                  className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
-                                  style={{
-                                    left: currentCategory === 'POZZETTO'
-                                      ? (ghostData.offset - 1) * currentGridConfig.pixelsPerMeter
-                                      : currentCategory === 'COPERCHIO'
-                                        ? ghostData.offset * currentGridConfig.pixelsPerMeter + (ghostData.nextLevel - 1) * 6
-                                        : ghostData.offset * currentGridConfig.pixelsPerMeter,
-                                    width: currentCategory === 'POZZETTO'
-                                      ? currentGridConfig.pixelsPerMeter
-                                      : selectedArticolo!.lunghezza * currentGridConfig.pixelsPerMeter,
-                                    height: currentCategory === 'POZZETTO' ? 40 : currentCategory === 'COPERCHIO' ? 34 : '100%',
-                                    bottom: currentCategory === 'POZZETTO'
-                                      ? (ghostData.nextLevel - 1) * 40
-                                      : currentCategory === 'COPERCHIO'
-                                        ? (ghostData.nextLevel - 1) * 6
-                                        : 0,
-                                    top: currentCategory === 'POZZETTO' ? 'auto' : currentCategory === 'VASCA' ? '10%' : 'auto'
-                                  }}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                                      if (v.tipo === 'POZZETTO') {
+                                        return (
+                                          <div
+                                            key={v.id}
+                                            className={`vasca-block pozzetto-cube ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                            style={{
+                                              left: ((v.offsetInizio || 1) - 1) * currentGridConfig.pixelsPerMeter + 2,
+                                              bottom: (v.livello - 1) * 40,
+                                              width: currentGridConfig.pixelsPerMeter - 4,
+                                              height: 36,
+                                              backgroundColor: v.colore,
+                                              opacity: isFaded ? 0.35 : 1,
+                                              zIndex: 10 + (v.livello || 1),
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              fontSize: '11px',
+                                              fontWeight: 800,
+                                              color: '#fff',
+                                              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+                                              borderRadius: '4px',
+                                              transition: 'all 0.2s ease'
+                                            }}
+                                            onClick={(e: any) => {
+                                              e.stopPropagation();
+                                              setSelectedArticolo(v);
+                                            }}
+                                            onMouseEnter={() => setHoveredArticolo(v)}
+                                            onMouseLeave={() => setHoveredArticolo(null)}
+                                          >
+                                            {v.codice.slice(-4)}
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div
+                                          key={v.id}
+                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                          style={{
+                                            left: isScaledVascaLayout ? `${(((v.offsetInizio || 0) / filaLength) * 100)}%` : (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
+                                            width: isScaledVascaLayout ? `${((v.lunghezza / filaLength) * 100)}%` : v.lunghezza * currentGridConfig.pixelsPerMeter,
+                                            backgroundColor: v.colore,
+                                            opacity: isFaded ? 0.35 : 1,
+                                            transform: v.livello > 1 ? `translateY(-${(v.livello - 1) * 10}px)` : 'none',
+                                            zIndex: 10 + (v.livello || 1)
+                                          }}
+                                          onClick={(e: any) => {
+                                            e.stopPropagation();
+                                            setSelectedArticolo(v);
+                                          }}
+                                          onMouseEnter={() => setHoveredArticolo(v)}
+                                          onMouseLeave={() => setHoveredArticolo(null)}
+                                        >
+                                          {v.codice} {v.livello > 1 && `(L${v.livello})`}
+                                        </div>
+                                      );
+                                    })}
+
+                                    {ghostData && ghostData.fila === fila && (
+                                      <div
+                                        className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
+                                        style={{
+                                          left: currentCategory === 'POZZETTO'
+                                            ? (ghostData.offset - 1) * currentGridConfig.pixelsPerMeter
+                                            : isScaledVascaLayout
+                                              ? `${((ghostData.offset / filaLength) * 100)}%`
+                                              : ghostData.offset * currentGridConfig.pixelsPerMeter,
+                                          width: currentCategory === 'POZZETTO'
+                                            ? currentGridConfig.pixelsPerMeter
+                                            : isScaledVascaLayout
+                                              ? `${((selectedArticolo!.lunghezza / filaLength) * 100)}%`
+                                              : selectedArticolo!.lunghezza * currentGridConfig.pixelsPerMeter,
+                                          height: currentCategory === 'POZZETTO' ? 40 : '100%',
+                                          bottom: currentCategory === 'POZZETTO'
+                                            ? (ghostData.nextLevel - 1) * 40
+                                            : 0,
+                                          top: currentCategory === 'POZZETTO' ? 'auto' : currentCategory === 'VASCA' ? '10%' : 'auto'
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1615,6 +1964,51 @@ const LogiTrackVasche = () => {
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
                   <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowCreateModal(false)}>Annulla</button>
                   <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleCreateArticolo}>Crea Articolo</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {solettaRelocationFlow && (
+            <div className="modal-overlay">
+              <div className="modal" style={{ maxWidth: '720px' }}>
+                <h2 style={{ fontSize: '20px', marginBottom: '12px' }}>Riposizionamento Solette</h2>
+                <p style={{ marginBottom: '8px', color: '#475569', lineHeight: 1.5 }}>
+                  Per scaricare <strong>{solettaRelocationFlow.target.codice}</strong>, riposiziona le solette sovrapposte una alla volta.
+                </p>
+                <p style={{ marginBottom: '20px', color: '#64748b' }}>
+                  Passo {solettaRelocationFlow.currentIndex + 1} di {solettaRelocationFlow.blockers.length}
+                </p>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '20px' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                    Soletta da spostare: {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.codice}
+                  </div>
+                  <div style={{ color: '#64748b', fontSize: '14px' }}>
+                    Pila attuale: {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.fila} | Livello: L{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.livello}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px' }}>
+                  {SOLETTA_PILES.map(pile => (
+                    <button
+                      key={pile}
+                      className="btn btn-secondary"
+                      style={{ justifyContent: 'center', padding: '10px' }}
+                      onClick={() => handleSolettaRelocation(pile)}
+                    >
+                      {pile}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setSolettaRelocationFlow(null)}
+                  >
+                    Annulla
+                  </button>
                 </div>
               </div>
             </div>
