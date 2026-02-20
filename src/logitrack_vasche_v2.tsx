@@ -1162,39 +1162,39 @@ const LogiTrackVasche = () => {
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; }
-        .app { max-width: 1400px; margin: 0 auto; padding: 24px; position: relative; }
+        .app { max-width: 100%; margin: 0 auto; padding: 12px 16px; position: relative; }
         
         /* Layout Blocks */
-        .header { background: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 14px; border-top: 4px solid #3b82f6; }
-        .header h1 { font-size: 28px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .header { background: white; padding: 10px 14px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 8px; border-top: 3px solid #3b82f6; }
+        .header h1 { font-size: 24px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
         .header p { color: #64748b; font-size: 14px; }
-        .header-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+        .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .header-left { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
         .header-right { display: flex; align-items: center; gap: 10px; }
         .user-chip { background: #eff6ff; color: #3b82f6; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; }
         .logout-link { background: #f8fafc; border: 1px solid #dbe3ef; color: #64748b; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
         
-        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-        .stat-card { background: white; padding: 16px; border-radius: 12px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .stat-label { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
-        .stat-value { font-size: 28px; font-weight: 800; color: #0f172a; }
+        .stats { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .stat-card { background: white; padding: 8px 10px; border-radius: 10px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-height: 56px; }
+        .stat-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+        .stat-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1; }
         
-        .controls { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-        .action-bar { position: sticky; top: 8px; z-index: 30; background: #ffffffde; backdrop-filter: blur(8px); border: 1px solid #dbe3ef; border-radius: 14px; padding: 10px; box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.45); }
-        .action-left { flex: 1; min-width: 360px; }
+        .controls { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+        .action-bar { position: sticky; top: 6px; z-index: 30; background: #ffffffde; backdrop-filter: blur(8px); border: 1px solid #dbe3ef; border-radius: 12px; padding: 8px; box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.45); }
+        .action-left { flex: 1; min-width: 320px; }
         .action-center { display: flex; align-items: center; gap: 8px; }
         .action-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-        .search-box { flex: 1; min-width: 300px; display: flex; gap: 12px; }
+        .search-box { flex: 1; min-width: 280px; display: flex; gap: 8px; }
         .search-container { position: relative; flex: 1; }
-        .search-input { width: 100%; padding: 12px 40px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: border-color 0.2s; }
+        .search-input { width: 100%; padding: 10px 36px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: border-color 0.2s; }
         .search-input:focus { outline: none; border-color: #3b82f6; }
-        .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
         
         .filter-tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
-        .filter-tab { padding: 8px 16px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; color: #64748b; transition: all 0.2s; }
+        .filter-tab { padding: 7px 12px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: #64748b; transition: all 0.2s; }
         .filter-tab.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
-        .btn { padding: 12px 24px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: opacity 0.2s; }
+        .btn { padding: 10px 14px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
         .btn:active { transform: scale(0.98); }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-secondary { background: #e2e8f0; color: #475569; }
@@ -1202,21 +1202,26 @@ const LogiTrackVasche = () => {
         .btn-warning { background: #f59e0b; color: white; }
         .btn-danger { background: #ef4444; color: white; }
         
-        .nav-tabs { display: flex; gap: 20px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; align-items: center; }
-        .nav-tab { padding: 12px 4px; font-weight: 700; font-size: 15px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .nav-tabs { display: flex; gap: 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 10px; align-items: center; }
+        .nav-tab { padding: 8px 4px; font-weight: 700; font-size: 15px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
         .nav-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
         .mode-badge { margin-left: auto; font-size: 12px; font-weight: 700; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; }
         
         /* Linear Layout (Timeline) */
-        .content { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
-        .grid-section { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .grid-container { overflow-x: auto; padding: 10px; }
+        .content { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; }
+        .content.grid-focus { min-height: calc(100vh - 280px); align-items: stretch; }
+        .content.grid-focus .grid-section { display: flex; flex-direction: column; min-height: 0; }
+        .content.grid-focus .grid-container { flex: 1; min-height: 0; overflow: auto; }
+        .content.grid-focus .sidebar { display: flex; flex-direction: column; min-height: 0; }
+        .content.grid-focus .vasca-list { flex: 1; min-height: 0; max-height: none; }
+        .grid-section { background: white; padding: 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .grid-container { overflow-x: auto; padding: 4px; }
         
-        .fila-row { display: grid; grid-template-columns: 60px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 12px; }
-        .fila-label { font-weight: 800; font-size: 18px; color: #1e293b; text-align: center; }
+        .fila-row { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; padding: 6px; background: #f8fafc; border-radius: 12px; }
+        .fila-label { font-weight: 800; font-size: 16px; color: #1e293b; text-align: center; }
         
         .fila-track { 
-          height: 60px; 
+          height: 52px; 
           background: #e2e8f0; 
           border-radius: 8px; 
           position: relative; 
@@ -1268,16 +1273,16 @@ const LogiTrackVasche = () => {
           display: flex;
           justify-content: space-between;
           padding: 0 60px 0 72px;
-          margin-bottom: 24px;
+          margin-bottom: 10px;
           color: #94a3b8;
           font-size: 10px;
           font-weight: 700;
         }
         
         /* Sidebar */
-        .sidebar { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .vasca-list { max-height: 600px; overflow-y: auto; padding-right: 8px; }
-        .vasca-card { padding: 16px; border: 2px solid #f1f5f9; border-radius: 12px; margin-bottom: 16px; cursor: pointer; transition: all 0.2s; }
+        .sidebar { background: white; padding: 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .vasca-list { max-height: 600px; overflow-y: auto; padding-right: 6px; }
+        .vasca-card { padding: 12px; border: 2px solid #f1f5f9; border-radius: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
         .vasca-card:hover { border-color: #cbd5e1; background: #f8fafc; }
         .vasca-card.selected { border-color: #3b82f6; background: #eff6ff; }
         .vasca-info { font-size: 13px; color: #475569; margin-top: 10px; display: grid; gap: 4px; }
@@ -1285,14 +1290,14 @@ const LogiTrackVasche = () => {
         .status-pill.in-area { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
         .status-pill.created { background: #fef3c7; color: #92400e; border-color: #fde68a; }
         .status-pill.shipped { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
-        .inventory-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+        .inventory-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
         .inventory-chip { border-radius: 10px; padding: 8px 10px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; color: #475569; background: #f8fafc; }
         .pile-column { display: flex; flex-direction: column; gap: 6px; }
         .pile-index { text-align: center; font-weight: 800; font-size: 13px; color: #0f172a; position: sticky; top: 0; background: #fff; border-radius: 6px; z-index: 3; }
         .pile-capacity { text-align: center; font-size: 11px; border: 1px solid; border-radius: 999px; padding: 4px 6px; font-weight: 700; }
         .quick-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; margin-bottom: 12px; }
         .quick-toggle input { accent-color: #3b82f6; }
-        .action-hint { font-size: 11px; color: #64748b; margin-bottom: 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .action-hint { font-size: 11px; color: #64748b; margin-bottom: 8px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
         .gravity-drop { animation: gravityDrop 0.45s ease-out; }
         @keyframes gravityDrop {
           0% { transform: translateY(-14px); }
@@ -1303,6 +1308,7 @@ const LogiTrackVasche = () => {
         .role-filter { padding: 8px 10px; border: 1px solid #dbe3ef; border-radius: 10px; background: #fff; color: #334155; font-size: 13px; }
         @media (max-width: 1100px) {
           .content { grid-template-columns: 1fr; }
+          .content.grid-focus { min-height: auto; }
           .users-layout { grid-template-columns: 1fr; }
           .action-left { min-width: 100%; }
           .mode-badge { margin-left: 0; }
@@ -1438,76 +1444,79 @@ const LogiTrackVasche = () => {
             </div>
           </header>
 
-          <div className="stats" style={{ position: 'relative', zIndex: 1 }}>
-            <StatCard label={`${currentCategory} Totali`} value={articoli.filter(v => v.tipo === currentCategory).length} />
-            <StatCard label="In piazzola" value={articoli.filter(v => v.stato === 'IN_AREA' && v.tipo === currentCategory).length} color="#10b981" />
-            <StatCard label="In attesa" value={articoli.filter(v => v.stato === 'CREATA' && v.tipo === currentCategory).length} color="#f59e0b" />
-            <StatCard label="Spedite" value={articoli.filter(v => v.stato === 'SPEDITA' && v.tipo === currentCategory).length} color="#ef4444" />
-          </div>
-
-          {/* CONTROLS */}
-          <div className="controls action-bar">
-            <div className="search-box action-left">
-              <div className="search-container">
-                <Search className="search-icon" size={18} />
-                <input
-                  type="text"
-                  placeholder="Cerca cliente (solo in giacenza)..."
-                  className="search-input"
-                  value={searchCliente}
-                  onChange={(e) => setSearchCliente(e.target.value)}
-                  onFocus={() => setShowClienteSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
-                />
-                {showClienteSuggestions && clienteSuggestions.length > 0 && (
-                  <div className="suggestions-list">
-                    <div className="suggestion-header">Suggerimenti Clienti</div>
-                    {clienteSuggestions.map(s => (
-                      <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
-                        {s}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {activeTab === 'grid' && (
+            <>
+              <div className="stats" style={{ position: 'relative', zIndex: 1 }}>
+                <StatCard label={`${currentCategory} Totali`} value={articoli.filter(v => v.tipo === currentCategory).length} />
+                <StatCard label="In piazzola" value={articoli.filter(v => v.stato === 'IN_AREA' && v.tipo === currentCategory).length} color="#10b981" />
+                <StatCard label="In attesa" value={articoli.filter(v => v.stato === 'CREATA' && v.tipo === currentCategory).length} color="#f59e0b" />
+                <StatCard label="Spedite" value={articoli.filter(v => v.stato === 'SPEDITA' && v.tipo === currentCategory).length} color="#ef4444" />
               </div>
-              <div className="search-container">
-                <Search className="search-icon" size={18} />
-                <input
-                  type="text"
-                  placeholder="Cerca commessa (solo in giacenza)..."
-                  className="search-input"
-                  value={searchCommessa}
-                  onChange={(e) => setSearchCommessa(e.target.value)}
-                  onFocus={() => setShowCommessaSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowCommessaSuggestions(false), 200)}
-                />
-                {showCommessaSuggestions && commessaSuggestions.length > 0 && (
-                  <div className="suggestions-list">
-                    <div className="suggestion-header">Suggerimenti Commesse</div>
-                    {commessaSuggestions.map(s => (
-                      <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
-                        {s}
+
+              <div className="controls action-bar">
+                <div className="search-box action-left">
+                  <div className="search-container">
+                    <Search className="search-icon" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Cerca cliente (solo in giacenza)..."
+                      className="search-input"
+                      value={searchCliente}
+                      onChange={(e) => setSearchCliente(e.target.value)}
+                      onFocus={() => setShowClienteSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
+                    />
+                    {showClienteSuggestions && clienteSuggestions.length > 0 && (
+                      <div className="suggestions-list">
+                        <div className="suggestion-header">Suggerimenti Clienti</div>
+                        {clienteSuggestions.map(s => (
+                          <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
+                            {s}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
+                  <div className="search-container">
+                    <Search className="search-icon" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Cerca commessa (solo in giacenza)..."
+                      className="search-input"
+                      value={searchCommessa}
+                      onChange={(e) => setSearchCommessa(e.target.value)}
+                      onFocus={() => setShowCommessaSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowCommessaSuggestions(false), 200)}
+                    />
+                    {showCommessaSuggestions && commessaSuggestions.length > 0 && (
+                      <div className="suggestions-list">
+                        <div className="suggestion-header">Suggerimenti Commesse</div>
+                        {commessaSuggestions.map(s => (
+                          <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
+                            {s}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="filter-tabs action-center">
+                  {(['all', 'in_area', 'creata', 'spedite'] as const).map((t) => (
+                    <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
+                      {t === 'all' ? 'Tutte' : t === 'in_area' ? 'In piazzola' : t === 'creata' ? 'In attesa' : 'Spedite'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="action-right">
+                  <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                    <Plus size={18} /> Nuovo Articolo
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <div className="filter-tabs action-center">
-              {(['all', 'in_area', 'creata', 'spedite'] as const).map((t) => (
-                <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
-                  {t === 'all' ? 'Tutte' : t === 'in_area' ? 'In piazzola' : t === 'creata' ? 'In attesa' : 'Spedite'}
-                </button>
-              ))}
-            </div>
-
-            <div className="action-right">
-              <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                <Plus size={20} /> Nuovo Articolo
-              </button>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* NAVIGATION */}
           <div className="nav-tabs" style={{ position: 'relative', zIndex: 1 }}>
@@ -1551,7 +1560,7 @@ const LogiTrackVasche = () => {
                 </div>
               )}
 
-              <div className="content" style={{ position: 'relative', zIndex: 1 }}>
+              <div className="content grid-focus" style={{ position: 'relative', zIndex: 1 }}>
                 <div className="grid-section">
                   {currentCategory === 'SOLETTA' ? (
                     <div className="ruler" style={{ justifyContent: 'space-between' }}>
@@ -1571,7 +1580,7 @@ const LogiTrackVasche = () => {
                     if (mode === 'view') return;
                     setMousePos({ x: e.clientX, y: e.clientY });
                   }}>
-                    <div className="grid-content-layout" style={{ display: 'flex', gap: '40px', alignItems: 'flex-start', padding: '20px' }}>
+                    <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: 'flex-start', padding: '8px' }}>
                       {/* --- SEZIONE VERTICALE (V1, V2 ecc.) --- */}
                       {currentGridConfig.verticalRows && currentGridConfig.verticalRows.length > 0 && (
                         <div className="vertical-tracks-section" style={{ display: 'flex', gap: '15px' }}>
@@ -1774,7 +1783,7 @@ const LogiTrackVasche = () => {
                                       width: isScaledVascaLayout
                                         ? `${(filaLength / maxGridLength) * 100}%`
                                         : getFilaLength(fila) * currentGridConfig.pixelsPerMeter,
-                                      height: currentCategory === 'POZZETTO' ? '160px' : '60px',
+                                      height: currentCategory === 'POZZETTO' ? '148px' : '52px',
                                       background: currentCategory === 'POZZETTO' ? 'transparent' : '#f8fafc',
                                       position: 'relative'
                                     }}
