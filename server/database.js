@@ -61,7 +61,29 @@ function initializeSchema() {
       FOREIGN KEY (vasca_id) REFERENCES articoli (id)
     )`);
 
+        ensureColumnExists('registro', 'utente_nome', 'TEXT');
+
         console.log('Schema del database inizializzato.');
+    });
+}
+
+function ensureColumnExists(tableName, columnName, columnDef) {
+    db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {
+        if (err) {
+            console.error(`Errore controllo schema ${tableName}:`, err.message);
+            return;
+        }
+
+        const hasColumn = (columns || []).some(c => c.name === columnName);
+        if (hasColumn) return;
+
+        db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`, (alterErr) => {
+            if (alterErr) {
+                console.error(`Errore migrazione ${tableName}.${columnName}:`, alterErr.message);
+                return;
+            }
+            console.log(`Migrazione completata: aggiunta colonna ${tableName}.${columnName}`);
+        });
     });
 }
 
