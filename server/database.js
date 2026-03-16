@@ -62,6 +62,7 @@ function initializeSchema() {
     )`);
 
         ensureColumnExists('registro', 'utente_nome', 'TEXT');
+        normalizeLegacyArticoli();
 
         console.log('Schema del database inizializzato.');
     });
@@ -85,6 +86,36 @@ function ensureColumnExists(tableName, columnName, columnDef) {
             console.log(`Migrazione completata: aggiunta colonna ${tableName}.${columnName}`);
         });
     });
+}
+
+function normalizeLegacyArticoli() {
+    db.run(
+        `UPDATE articoli
+         SET tipo = 'SOLETTA'
+         WHERE tipo = 'COPERCHIO'`,
+        (err) => {
+            if (err) {
+                console.error('Errore normalizzazione COPERCHIO:', err.message);
+            }
+        }
+    );
+
+    db.run(
+        `UPDATE articoli
+         SET tipo = 'VASCA',
+             stato = 'SPEDITA',
+             posizione = NULL,
+             fila = NULL,
+             offset_inizio = NULL,
+             livello = 1,
+             dim_base = NULL
+         WHERE tipo NOT IN ('VASCA', 'SOLETTA')`,
+        (err) => {
+            if (err) {
+                console.error('Errore archiviazione tipi legacy:', err.message);
+            }
+        }
+    );
 }
 
 module.exports = db;

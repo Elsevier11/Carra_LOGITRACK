@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, Plus, Trash2, Move, Package, AlertCircle, Check, X, Calendar, Clock, User, Hash, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Search, Plus, Trash2, Move, Package, AlertCircle, Check, X, Calendar, Clock, User, Hash, ChevronUp, ChevronDown, Waves, Layers3 } from 'lucide-react';
 
 const uuidv4 = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -23,9 +23,8 @@ interface Articolo {
   posizione: string | null;
   fila: string | null;
   offsetInizio: number | null;
-  tipo: 'VASCA' | 'POZZETTO' | 'SOLETTA';
+  tipo: 'VASCA' | 'SOLETTA';
   livello: number;
-  dimBase?: number;
   colore: string;
   stato: 'CREATA' | 'IN_AREA' | 'SPEDITA';
   dataCreazione: string;
@@ -73,7 +72,7 @@ const SOLETTA_PILES = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
 const SOLETTA_MAX_LEVELS = 10;
 const SOLETTA_LEVEL_HEIGHT_PX = 20;
 
-const GRID_CONFIGS: Record<'VASCA' | 'POZZETTO' | 'SOLETTA', GridConfig> = {
+const GRID_CONFIGS: Record<'VASCA' | 'SOLETTA', GridConfig> = {
   VASCA: {
     rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'L', 'M'],
     totalLength: 63.38,
@@ -92,11 +91,6 @@ const GRID_CONFIGS: Record<'VASCA' | 'POZZETTO' | 'SOLETTA', GridConfig> = {
     },
     pixelsPerMeter: 8
   },
-  POZZETTO: {
-    rows: ['Frontale', 'Posteriore'],
-    totalLength: 10,
-    pixelsPerMeter: 60
-  },
   SOLETTA: {
     rows: SOLETTA_PILES,
     totalLength: 10,
@@ -108,6 +102,16 @@ const TANK_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
   '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#a855f7',
 ];
+
+const CATEGORY_LABELS = {
+  VASCA: { tab: 'Vasche', singular: 'vasca', plural: 'Vasche' },
+  SOLETTA: { tab: 'Solette', singular: 'soletta', plural: 'Solette' },
+} as const;
+
+const CATEGORY_THEME = {
+  VASCA: { color: '#2563eb', background: '#dbeafe', Icon: Waves },
+  SOLETTA: { color: '#f59e0b', background: '#fef3c7', Icon: Layers3 },
+} as const;
 
 /**
  * UI SUB-COMPONENTS
@@ -142,13 +146,7 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
       <span className="tooltip-label">Posizione:</span>
       <span className="tooltip-value">{vasca.posizione || 'Non posizionato'}</span>
     </div>
-    {vasca.tipo === 'POZZETTO' && vasca.dimBase && (
-      <div className="tooltip-row">
-        <span className="tooltip-label">Base:</span>
-        <span className="tooltip-value">{vasca.dimBase}x{vasca.dimBase}</span>
-      </div>
-    )}
-    {(vasca.tipo === 'POZZETTO' || vasca.tipo === 'SOLETTA') && (
+    {vasca.tipo === 'SOLETTA' && (
       <div className="tooltip-row">
         <span className="tooltip-label">Livello:</span>
         <span className="tooltip-value">{vasca.livello}</span>
@@ -157,13 +155,32 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
   </div>
 );
 
+const CategoryBadge = ({ category }: { category: 'VASCA' | 'SOLETTA' }) => {
+  const theme = CATEGORY_THEME[category];
+  const Icon = theme.Icon;
+
+  return (
+    <div className={`category-badge ${category.toLowerCase()}`}>
+      <div className="category-badge-icon" style={{ color: theme.color, background: theme.background }}>
+        <Icon size={18} />
+      </div>
+      <div>
+        <div className="category-badge-label">{CATEGORY_LABELS[category].plural}</div>
+        <div className="category-badge-subtitle">
+          {category === 'VASCA' ? 'Vista lineare delle file di piazzale' : 'Vista per pile e livelli'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /**
  * MAIN COMPONENT
  */
 const LogiTrackVasche = () => {
   // --- States ---
   const [articoli, setArticoli] = useState<Articolo[]>([]);
-  const [currentCategory, setCurrentCategory] = useState<'VASCA' | 'POZZETTO' | 'SOLETTA'>('VASCA');
+  const [currentCategory, setCurrentCategory] = useState<'VASCA' | 'SOLETTA'>('VASCA');
 
   const currentGridConfig = useMemo(() => GRID_CONFIGS[currentCategory], [currentCategory]);
   const [registro, setRegistro] = useState<LogEntry[]>([]);
@@ -176,7 +193,7 @@ const LogiTrackVasche = () => {
   const [searchCommessa, setSearchCommessa] = useState('');
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
   const [showCommessaSuggestions, setShowCommessaSuggestions] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'in_area' | 'creata' | 'spedite'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'in_area' | 'creata'>('all');
   const [selectedArticolo, setSelectedArticolo] = useState<Articolo | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<{ message: string, onConfirm: () => void } | null>(null);
@@ -184,7 +201,7 @@ const LogiTrackVasche = () => {
   const [ghostPosition, setGhostPosition] = useState<string | null>(null);
   const [hoveredArticolo, setHoveredArticolo] = useState<Articolo | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [formData, setFormData] = useState({ codice: '', cliente: '', commessa: '', lunghezza: '', dimBase: '' });
+  const [formData, setFormData] = useState({ codice: '', cliente: '', commessa: '', lunghezza: '' });
   const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
@@ -192,9 +209,12 @@ const LogiTrackVasche = () => {
   const [solettaRelocationFlow, setSolettaRelocationFlow] = useState<SolettaRelocationFlow | null>(null);
   const [onlyActionable, setOnlyActionable] = useState(false);
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<string[]>([]);
-  const normalizeTipo = useCallback((tipo: string): Articolo['tipo'] => {
+  const inventoryListRef = useRef<HTMLDivElement | null>(null);
+  const visibleCategories = useMemo(() => (['VASCA', 'SOLETTA'] as const), []);
+  const normalizeTipo = useCallback((tipo: string): Articolo['tipo'] | null => {
     if (tipo === 'COPERCHIO') return 'SOLETTA';
-    return tipo as Articolo['tipo'];
+    if (tipo === 'VASCA' || tipo === 'SOLETTA') return tipo;
+    return null;
   }, []);
   const normalizeSolettaStacks = useCallback((items: Articolo[]) => {
     const normalized = [...items];
@@ -244,12 +264,6 @@ const LogiTrackVasche = () => {
   }, [maxGridLength]);
   const isScaledVascaLayout = currentCategory === 'VASCA' && !!currentGridConfig.rowLengths;
   const computeOffsetFromPointer = useCallback((fila: string, x: number, rectWidth: number) => {
-    if (currentCategory === 'POZZETTO') {
-      let offset = Math.ceil(x / currentGridConfig.pixelsPerMeter);
-      if (offset < 1) offset = 1;
-      if (offset > 10) offset = 10;
-      return offset;
-    }
     if (currentCategory === 'SOLETTA') return 0;
     if (isScaledVascaLayout) {
       const filaLength = getFilaLength(fila);
@@ -263,12 +277,17 @@ const LogiTrackVasche = () => {
     const fetchData = async () => {
       try {
         const [resVasche, resRegistro] = await Promise.all([
-          fetch('http://127.0.0.1:3001/api/articoli'),
-          fetch('http://127.0.0.1:3001/api/registro')
+          fetch('/api/articoli'),
+          fetch('/api/registro')
         ]);
         const dataVasche = await resVasche.json();
         const dataRegistro = await resRegistro.json();
-        const mappedVasche: Articolo[] = dataVasche.map((v: any) => ({ ...v, tipo: normalizeTipo(v.tipo) }));
+        const mappedVasche: Articolo[] = dataVasche
+          .map((v: any) => {
+            const tipo = normalizeTipo(v.tipo);
+            return tipo ? { ...v, tipo } : null;
+          })
+          .filter(Boolean) as Articolo[];
         const normalizedVasche = normalizeSolettaStacks(mappedVasche);
         setArticoli(normalizedVasche);
 
@@ -283,7 +302,7 @@ const LogiTrackVasche = () => {
 
         if (relevelUpdates.length > 0) {
           Promise.all(relevelUpdates.map(v =>
-            fetch(`http://127.0.0.1:3001/api/articoli/${v.id}`, {
+            fetch(`/api/articoli/${v.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ livello: v.livello, offsetInizio: v.offsetInizio, posizione: v.posizione })
@@ -334,7 +353,7 @@ const LogiTrackVasche = () => {
 
   const fetchUtenti = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:3001/api/utenti');
+      const res = await fetch('/api/utenti');
       const data = await res.json();
       setUtenti(data);
     } catch (err) {
@@ -348,7 +367,7 @@ const LogiTrackVasche = () => {
       return;
     }
     try {
-      const res = await fetch('http://127.0.0.1:3001/api/utenti', {
+      const res = await fetch('/api/utenti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userFormData)
@@ -366,7 +385,7 @@ const LogiTrackVasche = () => {
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Eliminare definitivamente questo utente?')) return;
     try {
-      const res = await fetch(`http://127.0.0.1:3001/api/utenti/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/utenti/${id}`, { method: 'DELETE' });
       if (res.ok) fetchUtenti();
     } catch (err) {
       console.error('Errore eliminazione utente:', err);
@@ -377,7 +396,7 @@ const LogiTrackVasche = () => {
     e.preventDefault();
     setLoginError('');
     try {
-      const res = await fetch('http://127.0.0.1:3001/api/login', {
+      const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)
@@ -405,9 +424,9 @@ const LogiTrackVasche = () => {
   }, [articoli]);
 
   const getStatusMeta = useCallback((stato: Articolo['stato']) => {
-    if (stato === 'IN_AREA') return { label: 'IN PIAZZOLA', className: 'status-pill in-area' };
+    if (stato === 'IN_AREA') return { label: 'IN PIAZZALE', className: 'status-pill in-area' };
     if (stato === 'CREATA') return { label: 'IN ATTESA', className: 'status-pill created' };
-    return { label: 'SPEDITA', className: 'status-pill shipped' };
+    return { label: 'SCARICATA', className: 'status-pill shipped' };
   }, []);
 
   const getPileLoadStyle = useCallback((occupied: number) => {
@@ -431,7 +450,7 @@ const LogiTrackVasche = () => {
     };
 
     try {
-      const res = await fetch('http://127.0.0.1:3001/api/registro', {
+      const res = await fetch('/api/registro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newLog)
@@ -451,34 +470,22 @@ const LogiTrackVasche = () => {
       if (offset !== 0) {
         return { available: false, reason: 'Le solette possono essere posizionate solo in pila' };
       }
-    } else if (tipo !== 'POZZETTO') {
+    } else {
       const filaLength = getFilaLength(fila);
       if (offset < 0 || offset + lunghezza > filaLength) {
         return { available: false, reason: 'Spazio insufficiente nella fila' };
-      }
-    } else {
-      // Per POZZETTO, offset deve essere un intero tra 1 e 10
-      if (offset < 1 || offset > 10) {
-        return { available: false, reason: 'Posizione non valida (deve essere 1-10)' };
       }
     }
 
     let topLevel = 0;
     let solettaCountInPile = 0;
-    const isStackable = tipo === 'POZZETTO' || tipo === 'SOLETTA';
+    const isStackable = tipo === 'SOLETTA';
 
     for (const v of articoli) {
       if (v.id === excludeId || v.stato !== 'IN_AREA' || v.fila !== fila || v.offsetInizio === null) continue;
 
       if (tipo === 'SOLETTA' && v.tipo === 'SOLETTA') {
         solettaCountInPile += 1;
-        continue;
-      }
-
-      if (tipo === 'POZZETTO' && v.tipo === 'POZZETTO') {
-        if (Math.abs(v.offsetInizio - offset) < 0.1) {
-          topLevel = Math.max(topLevel, v.livello);
-        }
         continue;
       }
 
@@ -502,9 +509,6 @@ const LogiTrackVasche = () => {
       }
     }
 
-    if (tipo === 'POZZETTO' && topLevel >= 4) {
-      return { available: false, reason: 'Altezza massima raggiunta (4 livelli)' };
-    }
     if (tipo === 'SOLETTA' && solettaCountInPile >= SOLETTA_MAX_LEVELS) {
       return { available: false, reason: `Pila piena: massimo ${SOLETTA_MAX_LEVELS} solette` };
     }
@@ -516,55 +520,69 @@ const LogiTrackVasche = () => {
   }, [articoli, currentGridConfig, getFilaLength]);
 
   // --- Computed Data ---
+  const activeArticoli = useMemo(() => {
+    return articoli.filter(v => v.tipo === currentCategory && v.stato !== 'SPEDITA');
+  }, [articoli, currentCategory]);
+
   const filteredVasche = useMemo(() => {
-    return articoli.filter(v => {
-      const matchCategory = v.tipo === currentCategory;
+    return activeArticoli.filter(v => {
       const matchCliente = v.cliente.toLowerCase().includes(searchCliente.toLowerCase());
       const matchCommessa = v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-
-      // La ricerca deve essere effettuata esclusivamente tra gli articoli in giacenza (IN_AREA)
-      const isSearching = searchCliente !== '' || searchCommessa !== '';
-      if (isSearching && v.stato !== 'IN_AREA') return false;
 
       const matchType =
         filterType === 'all' ||
         (filterType === 'in_area' && v.stato === 'IN_AREA') ||
-        (filterType === 'creata' && v.stato === 'CREATA') ||
-        (filterType === 'spedite' && v.stato === 'SPEDITA');
+        (filterType === 'creata' && v.stato === 'CREATA');
       const actionable =
         mode === 'position' ? v.stato === 'CREATA'
           : mode === 'move' ? v.stato === 'IN_AREA'
             : true;
       const matchActionable = onlyActionable ? actionable : true;
-      return matchCategory && matchCliente && matchCommessa && matchType && matchActionable;
+      return matchCliente && matchCommessa && matchType && matchActionable;
     });
-  }, [articoli, searchCliente, searchCommessa, filterType, currentCategory, mode, onlyActionable]);
+  }, [activeArticoli, searchCliente, searchCommessa, filterType, mode, onlyActionable]);
 
   const clienteSuggestions = useMemo(() => {
     if (!searchCliente) return [];
     return Array.from(new Set(
-      articoli.filter(v => v.stato === 'IN_AREA')
+      activeArticoli
         .map(v => v.cliente)
         .filter(c => c.toLowerCase().includes(searchCliente.toLowerCase()) && c.toLowerCase() !== searchCliente.toLowerCase())
     )).slice(0, 5);
-  }, [articoli, searchCliente]);
+  }, [activeArticoli, searchCliente]);
 
   const commessaSuggestions = useMemo(() => {
     if (!searchCommessa) return [];
     return Array.from(new Set(
-      articoli.filter(v => v.stato === 'IN_AREA')
+      activeArticoli
         .map(v => v.commessa)
         .filter(c => c.toLowerCase().includes(searchCommessa.toLowerCase()) && c.toLowerCase() !== searchCommessa.toLowerCase())
     )).slice(0, 5);
-  }, [articoli, searchCommessa]);
+  }, [activeArticoli, searchCommessa]);
+
+  const prioritizeSelectedArticolo = useCallback((items: Articolo[]) => {
+    if (!selectedArticolo) return items;
+
+    const selectedIndex = items.findIndex(v => v.id === selectedArticolo.id);
+    if (selectedIndex <= 0) return items;
+
+    const reordered = [...items];
+    const [selectedItem] = reordered.splice(selectedIndex, 1);
+    reordered.unshift(selectedItem);
+    return reordered;
+  }, [selectedArticolo]);
 
   const groupedFilteredArticoli = useMemo(() => {
     return {
-      creata: filteredVasche.filter(v => v.stato === 'CREATA'),
-      inArea: filteredVasche.filter(v => v.stato === 'IN_AREA'),
-      spedita: filteredVasche.filter(v => v.stato === 'SPEDITA')
+      creata: prioritizeSelectedArticolo(filteredVasche.filter(v => v.stato === 'CREATA')),
+      inArea: prioritizeSelectedArticolo(filteredVasche.filter(v => v.stato === 'IN_AREA'))
     };
-  }, [filteredVasche]);
+  }, [filteredVasche, prioritizeSelectedArticolo]);
+
+  useEffect(() => {
+    if (!selectedArticolo || !inventoryListRef.current) return;
+    inventoryListRef.current.scrollTop = 0;
+  }, [selectedArticolo]);
 
   const filteredUsers = useMemo(() => {
     return utenti
@@ -580,6 +598,7 @@ const LogiTrackVasche = () => {
     const valid = new Set<string>();
     SOLETTA_PILES.forEach(pile => {
       if (pile === current.fila) return;
+      if (solettaRelocationFlow.finalAction === 'move' && pile === solettaRelocationFlow.destinationPile) return;
       const check = isPositionAvailable(pile, 0, current.lunghezza, current.id, 'SOLETTA');
       if (check.available) valid.add(pile);
     });
@@ -678,7 +697,7 @@ const LogiTrackVasche = () => {
         dataCreazione: new Date().toISOString()
       };
 
-      const res = await fetch('http://127.0.0.1:3001/api/articoli', {
+      const res = await fetch('/api/articoli', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -687,7 +706,6 @@ const LogiTrackVasche = () => {
           cliente: newArticolo.cliente,
           commessa: newArticolo.commessa,
           lunghezza: newArticolo.lunghezza,
-          dimBase: formData.dimBase || null,
           colore: newArticolo.colore,
           stato: newArticolo.stato,
           dataCreazione: newArticolo.dataCreazione,
@@ -700,7 +718,12 @@ const LogiTrackVasche = () => {
         setArticoli(prev => [...prev, newArticolo]);
         addLog('CREAZIONE', newArticolo, `Creato nuovo ${newArticolo.tipo.toLowerCase()} per cliente ${newArticolo.cliente}`);
         setShowCreateModal(false);
-        setFormData({ codice: '', cliente: '', commessa: '', lunghezza: '', dimBase: '' });
+        setFormData({ codice: '', cliente: '', commessa: '', lunghezza: '' });
+        setSelectedArticolo(newArticolo);
+        setFilterType('creata');
+        setMode('position');
+        setGhostPosition(null);
+        setActiveTab('grid');
       } else {
         let errorMessage = 'Errore nella creazione.';
         try {
@@ -719,7 +742,7 @@ const LogiTrackVasche = () => {
   };
 
   const applyGravity = async (fila: string, offset: number) => {
-    // Ricalcola i livelli per gli articoli rimasti in una pila (Pozzetti/Solette)
+    // Ricalcola i livelli per gli articoli rimasti in una pila.
     setArticoli(currentArticoli => {
       const pile = currentArticoli
         .filter((v: Articolo) => v.stato === 'IN_AREA' && v.fila === fila && Math.abs((v.offsetInizio || 0) - offset) < 0.1)
@@ -734,11 +757,9 @@ const LogiTrackVasche = () => {
             const updated = {
               ...v,
               livello: expectedLevel,
-              posizione: v.tipo === 'POZZETTO'
-                ? `${fila} @ Slot ${offset} (H${expectedLevel})`
-                : v.tipo === 'SOLETTA'
-                  ? `${fila} @ Pila (L${expectedLevel})`
-                  : `${fila} @ ${offset.toFixed(2)}m (L${expectedLevel})`
+              posizione: v.tipo === 'SOLETTA'
+                ? `${fila} @ Pila (L${expectedLevel})`
+                : `${fila} @ ${offset.toFixed(2)}m (L${expectedLevel})`
             };
             updates.push(updated);
             return updated;
@@ -757,13 +778,13 @@ const LogiTrackVasche = () => {
         setTimeout(async () => {
           for (const up of updates) {
             try {
-              await fetch(`http://127.0.0.1:3001/api/articoli/${up.id}`, {
+              await fetch(`/api/articoli/${up.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ livello: up.livello, posizione: up.posizione })
               });
-              const posLabel = up.tipo === 'POZZETTO' ? `Slot ${up.offsetInizio}` : `${up.offsetInizio?.toFixed(2)}m`;
-              const levelLabel = up.tipo === 'POZZETTO' ? `H${up.livello}` : `L${up.livello}`;
+              const posLabel = up.tipo === 'SOLETTA' ? 'Pila' : `${up.offsetInizio?.toFixed(2)}m`;
+              const levelLabel = `L${up.livello}`;
               addLog('MOVIMENTAZIONE', up, `Caduta automatica in ${fila} @ ${posLabel} (${levelLabel})`);
             } catch (err) {
               console.error(`Errore ricalcolo gravità per ${up.codice}:`, err);
@@ -790,7 +811,7 @@ const LogiTrackVasche = () => {
     if (!vasca) return false;
 
     try {
-      const res = await fetch(`http://127.0.0.1:3001/api/articoli/${vascaId}`, {
+      const res = await fetch(`/api/articoli/${vascaId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -799,9 +820,7 @@ const LogiTrackVasche = () => {
           stato: newState,
           livello: newLevel,
           posizione: newFila
-            ? (vasca?.tipo === 'POZZETTO'
-              ? `${newFila} @ Slot ${newOffset} (H${newLevel})`
-              : vasca?.tipo === 'SOLETTA'
+            ? (vasca?.tipo === 'SOLETTA'
                 ? `${newFila} @ Pila (L${newLevel})`
                 : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`)
             : null
@@ -817,9 +836,7 @@ const LogiTrackVasche = () => {
               stato: newState,
               livello: newLevel,
               posizione: newFila
-                ? (v.tipo === 'POZZETTO'
-                  ? `${newFila} @ Slot ${newOffset} (H${newLevel})`
-                  : v.tipo === 'SOLETTA'
+                ? (v.tipo === 'SOLETTA'
                     ? `${newFila} @ Pila (L${newLevel})`
                     : `${newFila} @ ${newOffset?.toFixed(2)}m (L${newLevel})`)
                 : null
@@ -866,14 +883,12 @@ const LogiTrackVasche = () => {
       return;
     }
     const nextLevel = (check as any).nextLevel || 1;
-    const posLabel = selectedArticolo.tipo === 'POZZETTO'
-      ? `Slot ${offset} (H${nextLevel})`
-      : selectedArticolo.tipo === 'SOLETTA'
-        ? `Pila ${fila} (L${nextLevel})`
-        : `${offset.toFixed(2)}m (L${nextLevel})`;
+    const posLabel = selectedArticolo.tipo === 'SOLETTA'
+      ? `Pila ${fila} (L${nextLevel})`
+      : `${offset.toFixed(2)}m`;
 
     setShowConfirmModal({
-      message: `Posizionare ${selectedArticolo.codice} in Fila ${fila} a ${posLabel}?`,
+      message: `Posizionare ${selectedArticolo.codice} in fila ${fila} a ${posLabel}?`,
       onConfirm: () => {
         moveArticolo(selectedArticolo.id, fila, offset, 'IN_AREA', 'ENTRATA', `Posizionata in ${fila} @ ${posLabel}`, nextLevel);
         setShowConfirmModal(null);
@@ -884,6 +899,15 @@ const LogiTrackVasche = () => {
   const handleMoveArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'move') return;
     if (selectedArticolo.tipo === 'SOLETTA') {
+      if (fila === selectedArticolo.fila) {
+        alert('Seleziona una pila diversa da quella attuale.');
+        return;
+      }
+      const destinationCheck = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
+      if (!destinationCheck.available) {
+        alert(`Destinazione non disponibile: ${destinationCheck.reason}`);
+        return;
+      }
       const blockers = getSolettaBlockers(selectedArticolo);
       if (blockers.length > 0) {
         startSolettaRelocationFlow(selectedArticolo, 'move', fila);
@@ -896,14 +920,12 @@ const LogiTrackVasche = () => {
       return;
     }
     const nextLevel = (check as any).nextLevel || 1;
-    const posLabel = selectedArticolo.tipo === 'POZZETTO'
-      ? `Slot ${offset} (H${nextLevel})`
-      : selectedArticolo.tipo === 'SOLETTA'
-        ? `Pila ${fila} (L${nextLevel})`
-        : `${offset.toFixed(2)}m (L${nextLevel})`;
+    const posLabel = selectedArticolo.tipo === 'SOLETTA'
+      ? `Pila ${fila} (L${nextLevel})`
+      : `${offset.toFixed(2)}m`;
 
     setShowConfirmModal({
-      message: `Spostare ${selectedArticolo.codice} a Fila ${fila} @ ${posLabel}?`,
+      message: `Spostare ${selectedArticolo.codice} in fila ${fila} a ${posLabel}?`,
       onConfirm: () => {
         moveArticolo(selectedArticolo.id, fila, offset, 'IN_AREA', 'MOVIMENTAZIONE', `Spostata in ${fila} @ ${posLabel}`, nextLevel);
         setShowConfirmModal(null);
@@ -932,7 +954,7 @@ const LogiTrackVasche = () => {
     if (blockers.length === 0) {
       if (finalAction === 'ship') {
         setShowConfirmModal({
-          message: `Scaricare ${target.codice}? Le piazzole saranno liberate.`,
+          message: `Scaricare ${target.codice}? La posizione sarà liberata.`,
           onConfirm: () => {
             executeShipArticolo(target);
             setShowConfirmModal(null);
@@ -1039,8 +1061,8 @@ const LogiTrackVasche = () => {
   };
 
   const executeShipArticolo = async (vasca: Articolo) => {
-    // LIFO check for POZZETTO and SOLETTA
-    if (vasca.tipo === 'POZZETTO' || vasca.tipo === 'SOLETTA') {
+    // LIFO check for stacked items.
+    if (vasca.tipo === 'SOLETTA') {
       const itemAbove = articoli.find(v =>
         v.stato === 'IN_AREA' &&
         v.fila === vasca.fila &&
@@ -1049,13 +1071,13 @@ const LogiTrackVasche = () => {
         v.livello > vasca.livello
       );
       if (itemAbove) {
-        alert(`Errore LIFO: impossibile prelevare. Sopra c'e ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}.`);
+        alert(`Errore LIFO: impossibile scaricare. Sopra c'è ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}.`);
         return;
       }
     }
 
     try {
-      const res = await fetch(`http://127.0.0.1:3001/api/articoli/${vasca.id}`, {
+      const res = await fetch(`/api/articoli/${vasca.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ posizione: null, stato: 'SPEDITA', livello: 0, fila: null, offsetInizio: null })
@@ -1064,7 +1086,7 @@ const LogiTrackVasche = () => {
         setArticoli(prev => (prev as Articolo[]).map(v =>
           v.id === vasca.id ? { ...v, posizione: null, stato: 'SPEDITA', livello: 0, fila: null, offsetInizio: null } : v
         ));
-        addLog('SPEDIZIONE', vasca, 'Articolo spedito correttamente');
+        addLog('SPEDIZIONE', vasca, 'Articolo scaricato correttamente');
 
         if (vasca.fila && vasca.offsetInizio !== null) {
           applyGravity(vasca.fila, vasca.offsetInizio);
@@ -1073,10 +1095,10 @@ const LogiTrackVasche = () => {
         setSelectedArticolo(null);
       } else {
         console.error('Failed to ship articolo:', await res.text());
-        alert("Errore nella spedizione dell'articolo.");
+        alert("Errore nello scarico dell'articolo.");
       }
     } catch (err) {
-      console.error("Errore nella spedizione dell'articolo:", err);
+      console.error("Errore nello scarico dell'articolo:", err);
       alert('Errore di rete o del server.');
     }
   };
@@ -1087,7 +1109,7 @@ const LogiTrackVasche = () => {
       return;
     }
     setShowConfirmModal({
-      message: `Scaricare ${v.codice}? Le piazzole saranno liberate.`,
+      message: `Scaricare ${v.codice}? La posizione sarà liberata.`,
       onConfirm: () => {
         executeShipArticolo(v);
         setShowConfirmModal(null);
@@ -1098,7 +1120,7 @@ const LogiTrackVasche = () => {
   const clearLog = async () => {
     if (confirm('Pulire tutto il registro?')) {
       try {
-        const res = await fetch('http://127.0.0.1:3001/api/registro', {
+        const res = await fetch('/api/registro', {
           method: 'DELETE'
         });
         if (res.ok) {
@@ -1116,16 +1138,20 @@ const LogiTrackVasche = () => {
 
   const renderInventoryCard = (v: Articolo) => {
     const statusMeta = getStatusMeta(v.stato);
+    const isSelected = selectedArticolo?.id === v.id;
     return (
-      <div key={v.id} className={`vasca-card ${selectedArticolo?.id === v.id ? 'selected' : ''}`} onClick={() => setSelectedArticolo(v)}>
+      <div key={v.id} className={`vasca-card ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedArticolo(v)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: v.colore }}></div>
             <span className="vasca-codice">{v.codice}</span>
           </div>
-          <span className={statusMeta.className}>
-            {statusMeta.label}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {isSelected && <span className="selection-pill">Selezionato</span>}
+            <span className={statusMeta.className}>
+              {statusMeta.label}
+            </span>
+          </div>
         </div>
         <div className="vasca-info">
           <div><strong>Cliente:</strong> {v.cliente}</div>
@@ -1133,7 +1159,7 @@ const LogiTrackVasche = () => {
           <div><strong>Lunghezza:</strong> {v.lunghezza}m</div>
           {v.posizione && <div><strong>Posizione:</strong> {v.posizione}</div>}
         </div>
-        {selectedArticolo?.id === v.id && (
+        {isSelected && (
           <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
             {v.stato === 'CREATA' && (
               <button className="btn btn-success" style={{ flex: 1, padding: '8px' }} onClick={(e) => { e.stopPropagation(); setMode('position'); }}>
@@ -1253,11 +1279,6 @@ const LogiTrackVasche = () => {
         .vasca-block:hover { transform: translateY(-2px); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .vasca-block.selected { border: 3px solid #f59e0b; }
         
-        .pozzetto-cube { 
-          top: auto !important; 
-          margin-bottom: 2px;
-        }
-        
         .ghost-block {
           position: absolute;
           height: 80%;
@@ -1286,6 +1307,7 @@ const LogiTrackVasche = () => {
         .vasca-card:hover { border-color: #cbd5e1; background: #f8fafc; }
         .vasca-card.selected { border-color: #3b82f6; background: #eff6ff; }
         .vasca-info { font-size: 13px; color: #475569; margin-top: 10px; display: grid; gap: 4px; }
+        .selection-pill { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 999px; letter-spacing: 0.2px; background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
         .status-pill { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 999px; border: 1px solid transparent; letter-spacing: 0.2px; }
         .status-pill.in-area { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
         .status-pill.created { background: #fef3c7; color: #92400e; border-color: #fde68a; }
@@ -1349,11 +1371,15 @@ const LogiTrackVasche = () => {
         .log-type.uscita, .log-type.spedizione { background: #fee2e2; color: #b91c1c; }
         .product-tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 12px; }
         .product-tab { padding: 8px 16px; border-radius: 8px; font-weight: 800; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #64748b; }
+        .product-tab-content { display: flex; align-items: center; gap: 8px; }
         .product-tab:hover { background: #e2e8f0; }
         .product-tab.active { background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .product-tab.active.vasca { color: #3b82f6; }
-        .product-tab.active.pozzetto { color: #10b981; }
         .product-tab.active.soletta { color: #f59e0b; }
+        .category-badge { display: flex; align-items: center; gap: 12px; border-radius: 14px; border: 1px solid #e2e8f0; background: white; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+        .category-badge-icon { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .category-badge-label { font-size: 15px; font-weight: 800; color: #0f172a; }
+        .category-badge-subtitle { font-size: 12px; color: #64748b; }
         
         .faded { opacity: 0.25; filter: grayscale(0.5); }
       `}</style>
@@ -1365,8 +1391,8 @@ const LogiTrackVasche = () => {
             <div style={{ background: '#eff6ff', width: '64px', height: '64px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
               <Package size={32} color="#3b82f6" />
             </div>
-            <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>Benvenuto in LogiTrack</h2>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '32px' }}>Accedi per gestire la movimentazione articoli</p>
+            <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>Accesso LogiTrack</h2>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '32px' }}>Inserisci le credenziali per operare in piazzale</p>
 
             <form onSubmit={handleLogin}>
               <div className="form-group" style={{ textAlign: 'left' }}>
@@ -1391,12 +1417,12 @@ const LogiTrackVasche = () => {
               </div>
               {loginError && <p style={{ color: '#ef4444', fontSize: '12px', fontWeight: 700, marginTop: '-12px', marginBottom: '16px' }}>{loginError}</p>}
               <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                Accedi al Sistema
+                Entra
               </button>
             </form>
 
             <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0', color: '#94a3b8', fontSize: '12px' }}>
-              Gestione Articoli Industriali v2.6 - Accesso Riservato
+              LogiTrack v2.6 - Accesso riservato
             </div>
           </div>
         </div>
@@ -1412,7 +1438,7 @@ const LogiTrackVasche = () => {
                 </div>
 
                 <div className="product-tabs">
-                  {(['VASCA', 'POZZETTO', 'SOLETTA'] as const).map(cat => (
+                  {visibleCategories.map(cat => (
                     <div
                       key={cat}
                       className={`product-tab ${currentCategory === cat ? 'active' : ''} ${cat.toLowerCase()}`}
@@ -1422,14 +1448,26 @@ const LogiTrackVasche = () => {
                         setMode('view');
                       }}
                     >
-                      {cat}
+                      <div className="product-tab-content">
+                        {cat === 'VASCA' ? <Waves size={16} /> : <Layers3 size={16} />}
+                        <span>{CATEGORY_LABELS[cat].tab}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
               <div className="header-right">
-                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Yard Manager Multi-Prodotto</span>
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Gestione piazzale</span>
+                {currentUser?.ruolo === 'ADMIN' && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ padding: '8px 12px', fontSize: '12px' }}
+                    onClick={() => setActiveTab('utenti')}
+                  >
+                    Utenti
+                  </button>
+                )}
                 <div className="user-chip">
                   <User size={13} />
                   {currentUser?.username.toUpperCase()}
@@ -1446,11 +1484,11 @@ const LogiTrackVasche = () => {
 
           {activeTab === 'grid' && (
             <>
+              <CategoryBadge category={currentCategory} />
               <div className="stats" style={{ position: 'relative', zIndex: 1 }}>
-                <StatCard label={`${currentCategory} Totali`} value={articoli.filter(v => v.tipo === currentCategory).length} />
-                <StatCard label="In piazzola" value={articoli.filter(v => v.stato === 'IN_AREA' && v.tipo === currentCategory).length} color="#10b981" />
-                <StatCard label="In attesa" value={articoli.filter(v => v.stato === 'CREATA' && v.tipo === currentCategory).length} color="#f59e0b" />
-                <StatCard label="Spedite" value={articoli.filter(v => v.stato === 'SPEDITA' && v.tipo === currentCategory).length} color="#ef4444" />
+                <StatCard label={`${CATEGORY_LABELS[currentCategory].plural} attive`} value={activeArticoli.length} />
+                <StatCard label="In piazzale" value={activeArticoli.filter(v => v.stato === 'IN_AREA').length} color="#10b981" />
+                <StatCard label="In attesa" value={activeArticoli.filter(v => v.stato === 'CREATA').length} color="#f59e0b" />
               </div>
 
               <div className="controls action-bar">
@@ -1459,7 +1497,7 @@ const LogiTrackVasche = () => {
                     <Search className="search-icon" size={18} />
                     <input
                       type="text"
-                      placeholder="Cerca cliente (solo in giacenza)..."
+                      placeholder="Cerca cliente..."
                       className="search-input"
                       value={searchCliente}
                       onChange={(e) => setSearchCliente(e.target.value)}
@@ -1468,7 +1506,7 @@ const LogiTrackVasche = () => {
                     />
                     {showClienteSuggestions && clienteSuggestions.length > 0 && (
                       <div className="suggestions-list">
-                        <div className="suggestion-header">Suggerimenti Clienti</div>
+                        <div className="suggestion-header">Clienti trovati</div>
                         {clienteSuggestions.map(s => (
                           <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
                             {s}
@@ -1481,7 +1519,7 @@ const LogiTrackVasche = () => {
                     <Search className="search-icon" size={18} />
                     <input
                       type="text"
-                      placeholder="Cerca commessa (solo in giacenza)..."
+                      placeholder="Cerca commessa..."
                       className="search-input"
                       value={searchCommessa}
                       onChange={(e) => setSearchCommessa(e.target.value)}
@@ -1490,7 +1528,7 @@ const LogiTrackVasche = () => {
                     />
                     {showCommessaSuggestions && commessaSuggestions.length > 0 && (
                       <div className="suggestions-list">
-                        <div className="suggestion-header">Suggerimenti Commesse</div>
+                        <div className="suggestion-header">Commesse trovate</div>
                         {commessaSuggestions.map(s => (
                           <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
                             {s}
@@ -1502,16 +1540,16 @@ const LogiTrackVasche = () => {
                 </div>
 
                 <div className="filter-tabs action-center">
-                  {(['all', 'in_area', 'creata', 'spedite'] as const).map((t) => (
+                  {(['all', 'in_area', 'creata'] as const).map((t) => (
                     <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
-                      {t === 'all' ? 'Tutte' : t === 'in_area' ? 'In piazzola' : t === 'creata' ? 'In attesa' : 'Spedite'}
+                      {t === 'all' ? 'Attive' : t === 'in_area' ? 'In piazzale' : 'Da posizionare'}
                     </button>
                   ))}
                 </div>
 
                 <div className="action-right">
                   <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                    <Plus size={18} /> Nuovo Articolo
+                    <Plus size={18} /> Crea {CATEGORY_LABELS[currentCategory].singular}
                   </button>
                 </div>
               </div>
@@ -1521,19 +1559,21 @@ const LogiTrackVasche = () => {
           {/* NAVIGATION */}
           <div className="nav-tabs" style={{ position: 'relative', zIndex: 1 }}>
             <div className={`nav-tab ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
-              Planimetria Spazi
+              Planimetria
             </div>
             <div className={`nav-tab ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
-              Registro Operazioni
+              Registro
             </div>
             {currentUser?.ruolo === 'ADMIN' && (
               <div className={`nav-tab ${activeTab === 'utenti' ? 'active' : ''}`} onClick={() => setActiveTab('utenti')}>
-                Gestione Utenti
+                Utenti
               </div>
             )}
-            <div className="mode-badge">
-              Modalita: {mode === 'view' ? 'Visualizzazione' : mode === 'position' ? 'Posizionamento' : 'Spostamento'}
-            </div>
+            {activeTab === 'grid' && (
+              <div className="mode-badge">
+                Modalità: {mode === 'view' ? 'Vista' : mode === 'position' ? 'Posizionamento' : 'Spostamento'}
+              </div>
+            )}
           </div>
 
           {/* MAIN CONTENT */}
@@ -1544,17 +1584,17 @@ const LogiTrackVasche = () => {
                   <AlertCircle size={22} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>
-                      {mode === 'position' ? 'Modalita posizionamento' : 'Modalita spostamento'}
+                      {mode === 'position' ? 'Posizionamento attivo' : 'Spostamento attivo'}
                     </div>
                     <div style={{ fontSize: '14px' }}>
-                      Seleziona una posizione libera per l'articolo <strong>{selectedArticolo?.codice}</strong> ({selectedArticolo?.lunghezza}m)
+                      Seleziona una posizione libera per <strong>{selectedArticolo?.codice}</strong> ({selectedArticolo?.lunghezza}m)
                     </div>
                     <button
                       className="btn btn-secondary"
                       style={{ marginTop: '12px', padding: '8px 16px', fontSize: '13px' }}
                       onClick={() => { setMode('view'); setSelectedArticolo(null); setGhostPosition(null); }}
                     >
-                      <X size={14} /> Cancella operazione
+                      <X size={14} /> Annulla
                     </button>
                   </div>
                 </div>
@@ -1783,8 +1823,8 @@ const LogiTrackVasche = () => {
                                       width: isScaledVascaLayout
                                         ? `${(filaLength / maxGridLength) * 100}%`
                                         : getFilaLength(fila) * currentGridConfig.pixelsPerMeter,
-                                      height: currentCategory === 'POZZETTO' ? '148px' : '52px',
-                                      background: currentCategory === 'POZZETTO' ? 'transparent' : '#f8fafc',
+                                      height: '52px',
+                                      background: '#f8fafc',
                                       position: 'relative'
                                     }}
                                     onClick={(e: any) => {
@@ -1803,32 +1843,6 @@ const LogiTrackVasche = () => {
                                     }}
                                     onMouseLeave={() => setGhostPosition(null)}
                                   >
-                                    {currentCategory === 'POZZETTO' && (
-                                      <>
-                                        {Array.from({ length: 11 }).map((_, i) => (
-                                          <div key={`v-${i}`} style={{
-                                            position: 'absolute',
-                                            left: i * currentGridConfig.pixelsPerMeter,
-                                            width: 0,
-                                            height: '100%',
-                                            borderRight: '1px dashed #cbd5e1',
-                                            pointerEvents: 'none',
-                                            zIndex: 0
-                                          }} />
-                                        ))}
-                                        {Array.from({ length: 5 }).map((_, i) => (
-                                          <div key={`h-${i}`} style={{
-                                            position: 'absolute',
-                                            bottom: i * 40,
-                                            width: '100%',
-                                            height: 0,
-                                            borderTop: '1px dashed #cbd5e1',
-                                            pointerEvents: 'none',
-                                            zIndex: 0
-                                          }} />
-                                        ))}
-                                      </>
-                                    )}
                                     {articoliPerFila[fila]?.map((v: Articolo) => {
                                       const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
                                       let isFaded = false;
@@ -1838,41 +1852,6 @@ const LogiTrackVasche = () => {
                                           v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
                                         const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
                                         if (!(matchesSearch && matchesSelection)) isFaded = true;
-                                      }
-
-                                      if (v.tipo === 'POZZETTO') {
-                                        return (
-                                          <div
-                                            key={v.id}
-                                            className={`vasca-block pozzetto-cube ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''}`}
-                                            style={{
-                                              left: ((v.offsetInizio || 1) - 1) * currentGridConfig.pixelsPerMeter + 2,
-                                              bottom: (v.livello - 1) * 40,
-                                              width: currentGridConfig.pixelsPerMeter - 4,
-                                              height: 36,
-                                              backgroundColor: v.colore,
-                                              opacity: isFaded ? 0.35 : 1,
-                                              zIndex: 10 + (v.livello || 1),
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                              fontSize: '11px',
-                                              fontWeight: 800,
-                                              color: '#fff',
-                                              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-                                              borderRadius: '4px',
-                                              transition: 'all 0.2s ease'
-                                            }}
-                                            onClick={(e: any) => {
-                                              e.stopPropagation();
-                                              setSelectedArticolo(v);
-                                            }}
-                                            onMouseEnter={() => setHoveredArticolo(v)}
-                                            onMouseLeave={() => setHoveredArticolo(null)}
-                                          >
-                                            {v.codice.slice(-4)}
-                                          </div>
-                                        );
                                       }
 
                                       return (
@@ -1903,21 +1882,15 @@ const LogiTrackVasche = () => {
                                       <div
                                         className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
                                         style={{
-                                          left: currentCategory === 'POZZETTO'
-                                            ? (ghostData.offset - 1) * currentGridConfig.pixelsPerMeter
-                                            : isScaledVascaLayout
+                                          left: isScaledVascaLayout
                                               ? `${((ghostData.offset / filaLength) * 100)}%`
                                               : ghostData.offset * currentGridConfig.pixelsPerMeter,
-                                          width: currentCategory === 'POZZETTO'
-                                            ? currentGridConfig.pixelsPerMeter
-                                            : isScaledVascaLayout
+                                          width: isScaledVascaLayout
                                               ? `${((selectedArticolo!.lunghezza / filaLength) * 100)}%`
                                               : selectedArticolo!.lunghezza * currentGridConfig.pixelsPerMeter,
-                                          height: currentCategory === 'POZZETTO' ? 40 : '100%',
-                                          bottom: currentCategory === 'POZZETTO'
-                                            ? (ghostData.nextLevel - 1) * 40
-                                            : 0,
-                                          top: currentCategory === 'POZZETTO' ? 'auto' : currentCategory === 'VASCA' ? '10%' : 'auto'
+                                          height: '100%',
+                                          bottom: 0,
+                                          top: currentCategory === 'VASCA' ? '10%' : 'auto'
                                         }}
                                       />
                                     )}
@@ -1934,26 +1907,29 @@ const LogiTrackVasche = () => {
 
                 <div className="sidebar">
                   <h2 style={{ fontSize: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
-                    Inventario Articoli <span style={{ color: '#94a3b8' }}>{filteredVasche.length}</span>
+                    {CATEGORY_LABELS[currentCategory].plural} visibili <span style={{ color: '#94a3b8' }}>{filteredVasche.length}</span>
                   </h2>
                   {selectedArticolo && (
                     <div className="action-hint">
-                      Selezionato: <strong>{selectedArticolo.codice}</strong> | Shortcut: <strong>P</strong> posiziona, <strong>M</strong> sposta, <strong>S</strong> scarica, <strong>Esc</strong> annulla.
+                      Selezionato: <strong>{selectedArticolo.codice}</strong> {mode === 'view'
+                        ? <>| Azioni disponibili: {selectedArticolo.stato === 'CREATA'
+                          ? <><strong>P</strong> posiziona</>
+                          : <><strong>M</strong> sposta, <strong>S</strong> scarica</>} | <strong>Esc</strong> annulla.</>
+                        : <>| Conferma una posizione sulla planimetria o premi <strong>Esc</strong> per annullare.</>}
                     </div>
                   )}
                   <label className="quick-toggle">
                     <input type="checkbox" checked={onlyActionable} onChange={e => setOnlyActionable(e.target.checked)} />
-                    Mostra solo articoli azionabili nella modalita corrente
+                    Mostra solo articoli utilizzabili in questa modalità
                   </label>
                   <div className="inventory-meta">
-                    <div className="inventory-chip">In piazzola: {filteredVasche.filter(v => v.stato === 'IN_AREA').length}</div>
+                    <div className="inventory-chip">In piazzale: {filteredVasche.filter(v => v.stato === 'IN_AREA').length}</div>
                     <div className="inventory-chip">In attesa: {filteredVasche.filter(v => v.stato === 'CREATA').length}</div>
-                    <div className="inventory-chip">Spedite: {filteredVasche.filter(v => v.stato === 'SPEDITA').length}</div>
                   </div>
-                  <div className="vasca-list">
+                  <div className="vasca-list" ref={inventoryListRef}>
                     {groupedFilteredArticoli.inArea.length > 0 && (
                       <>
-                        <div className="suggestion-header" style={{ marginBottom: '8px' }}>In piazzola</div>
+                        <div className="suggestion-header" style={{ marginBottom: '8px' }}>In piazzale</div>
                         {groupedFilteredArticoli.inArea.map(renderInventoryCard)}
                       </>
                     )}
@@ -1963,12 +1939,6 @@ const LogiTrackVasche = () => {
                         {groupedFilteredArticoli.creata.map(renderInventoryCard)}
                       </>
                     )}
-                    {groupedFilteredArticoli.spedita.length > 0 && (
-                      <>
-                        <div className="suggestion-header" style={{ marginBottom: '8px' }}>Spedite</div>
-                        {groupedFilteredArticoli.spedita.map(renderInventoryCard)}
-                      </>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1976,9 +1946,9 @@ const LogiTrackVasche = () => {
           ) : activeTab === 'logs' ? (
             <div className="grid-section" style={{ position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '18px' }}>Storico Operazioni</h2>
+                <h2 style={{ fontSize: '18px' }}>Registro operazioni</h2>
                 <button className="btn btn-secondary" onClick={clearLog}>
-                  Svuota Log
+                  Svuota registro
                 </button>
               </div>
               <table className="log-table">
@@ -2018,7 +1988,7 @@ const LogiTrackVasche = () => {
                 </thead>
                 <tbody>
                   {sortedRegistro.length === 0 ? (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Nessuna attivita registrata</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Nessuna attività registrata</td></tr>
                   ) : (
                     sortedRegistro.map((log: LogEntry) => (
                       <tr key={log.id}>
@@ -2074,35 +2044,43 @@ const LogiTrackVasche = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map((u: AppUser) => (
-                        <tr key={u.id}>
-                          <td style={{ fontWeight: 700 }}>{u.username}</td>
-                          <td style={{ color: '#94a3b8', fontSize: '12px' }}>{u.password || '******'}</td>
-                          <td>
-                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '999px', border: '1px solid', background: u.ruolo === 'ADMIN' ? '#dbeafe' : '#f1f5f9', color: u.ruolo === 'ADMIN' ? '#1e40af' : '#64748b', borderColor: u.ruolo === 'ADMIN' ? '#bfdbfe' : '#e2e8f0' }}>
-                              {u.ruolo}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {u.username !== 'admin' && (
-                              <button
-                                className="btn btn-danger"
-                                style={{ padding: '6px 10px', borderRadius: '8px', marginLeft: 'auto', fontSize: '12px' }}
-                                onClick={() => handleDeleteUser(u.id)}
-                              >
-                                <Trash2 size={14} /> Elimina
-                              </button>
-                            )}
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
+                            Nessun utente corrisponde ai filtri selezionati
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredUsers.map((u: AppUser) => (
+                          <tr key={u.id}>
+                            <td style={{ fontWeight: 700 }}>{u.username}</td>
+                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>********</td>
+                            <td>
+                              <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '999px', border: '1px solid', background: u.ruolo === 'ADMIN' ? '#dbeafe' : '#f1f5f9', color: u.ruolo === 'ADMIN' ? '#1e40af' : '#64748b', borderColor: u.ruolo === 'ADMIN' ? '#bfdbfe' : '#e2e8f0' }}>
+                                {u.ruolo}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              {u.username !== 'admin' && (
+                                <button
+                                  className="btn btn-danger"
+                                  style={{ padding: '6px 10px', borderRadius: '8px', marginLeft: 'auto', fontSize: '12px' }}
+                                  onClick={() => handleDeleteUser(u.id)}
+                                >
+                                  <Trash2 size={14} /> Elimina
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
 
                 <div className="sidebar" style={{ width: '100%' }}>
-                  <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Nuovo utente</h2>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>Compila i dati e assegna il ruolo operativo.</p>
+                  <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Crea utente</h2>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>Inserisci i dati e assegna il ruolo.</p>
                   <div className="form-group">
                     <label className="form-label">Username</label>
                     <input
@@ -2119,7 +2097,7 @@ const LogiTrackVasche = () => {
                       className="form-input"
                       value={userFormData.password}
                       onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
-                      placeholder="Password segreta"
+                      placeholder="Password iniziale"
                     />
                   </div>
                   <div className="form-group">
@@ -2134,10 +2112,10 @@ const LogiTrackVasche = () => {
                     </select>
                   </div>
                   <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: '10px' }} onClick={handleCreateUser}>
-                    <Plus size={18} /> Crea Utente
+                    <Plus size={18} /> Crea utente
                   </button>
                   <div style={{ fontSize: '11px', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
-                    Suggerimento: usa password temporanee e cambiale al primo accesso operativo.
+                    Suggerimento: usa password iniziali semplici da comunicare e cambiale al primo accesso.
                   </div>
                 </div>
               </div>
@@ -2148,9 +2126,9 @@ const LogiTrackVasche = () => {
           {showCreateModal && (
             <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
-                <h2 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><Plus color="#3b82f6" /> Nuovo {currentCategory.toLowerCase()}</h2>
+                <h2 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><Plus color="#3b82f6" /> Crea {CATEGORY_LABELS[currentCategory].singular}</h2>
                 <div className="form-group">
-                  <label className="form-label">Codice Identificativo</label>
+                  <label className="form-label">Codice articolo</label>
                   <input className="form-input" value={formData.codice} onChange={e => setFormData({ ...formData, codice: e.target.value })} placeholder="Es. VSC_001" />
                 </div>
                 <div className="form-group">
@@ -2158,41 +2136,17 @@ const LogiTrackVasche = () => {
                   <input className="form-input" value={formData.cliente} onChange={e => setFormData({ ...formData, cliente: e.target.value })} placeholder="Ragione sociale" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Codice Commessa</label>
+                  <label className="form-label">Commessa</label>
                   <input className="form-input" value={formData.commessa} onChange={e => setFormData({ ...formData, commessa: e.target.value })} placeholder="COM_XXXX" />
                 </div>
 
-                {currentCategory === 'POZZETTO' ? (
-                  <div className="form-group">
-                    <label className="form-label">Dimensione Base (cm)</label>
-                    <select
-                      className="form-input"
-                      value={formData.dimBase}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setFormData({
-                          ...formData,
-                          dimBase: val,
-                          lunghezza: val ? (Number(val) / 100).toString() : ''
-                        });
-                      }}
-                    >
-                      <option value="">Seleziona base...</option>
-                      <option value="80">80x80</option>
-                      <option value="120">120x120</option>
-                      <option value="160">160x160</option>
-                      <option value="200">200x200</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div className="form-group">
-                    <label className="form-label">Lunghezza Totale (metri)</label>
-                    <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 8.5" />
-                  </div>
-                )}
+                <div className="form-group">
+                  <label className="form-label">Lunghezza (metri)</label>
+                  <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 8.5" />
+                </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
                   <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowCreateModal(false)}>Annulla</button>
-                  <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleCreateArticolo}>Crea Articolo</button>
+                  <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleCreateArticolo}>Crea {CATEGORY_LABELS[currentCategory].singular}</button>
                 </div>
               </div>
             </div>
@@ -2205,8 +2159,13 @@ const LogiTrackVasche = () => {
                 <p style={{ marginBottom: '8px', color: '#475569', lineHeight: 1.5 }}>
                   {solettaRelocationFlow.finalAction === 'ship'
                     ? <>Per scaricare <strong>{solettaRelocationFlow.target.codice}</strong>, riposiziona le solette sovrapposte una alla volta.</>
-                    : <>Per spostare <strong>{solettaRelocationFlow.target.codice}</strong>, libera prima la pila corrente riposizionando le solette superiori.</>}
+                    : <>Per spostare <strong>{solettaRelocationFlow.target.codice}</strong> in <strong>pila {solettaRelocationFlow.destinationPile}</strong>, libera prima la pila corrente riposizionando le solette superiori.</>}
                 </p>
+                {solettaRelocationFlow.finalAction === 'move' && solettaRelocationFlow.destinationPile && (
+                  <p style={{ marginBottom: '16px', color: '#1d4ed8', fontWeight: 700 }}>
+                    Destinazione finale riservata: pila {solettaRelocationFlow.destinationPile}
+                  </p>
+                )}
                 <p style={{ marginBottom: '20px', color: '#64748b' }}>
                   Passo {solettaRelocationFlow.currentIndex + 1} di {solettaRelocationFlow.blockers.length}
                 </p>
@@ -2251,7 +2210,10 @@ const LogiTrackVasche = () => {
                     </button>
                   )})}
                 </div>
-                <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>Sono cliccabili solo le pile valide per questo passaggio.</p>
+                <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>
+                  Sono cliccabili solo le pile valide per questo passaggio.
+                  {solettaRelocationFlow.finalAction === 'move' && solettaRelocationFlow.destinationPile ? ' La pila finale resta riservata al pezzo selezionato.' : ''}
+                </p>
 
                 {solettaRelocationFlow.history.length > 0 && (
                   <div style={{ marginTop: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>

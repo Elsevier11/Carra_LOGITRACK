@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
 const db = require('./database');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 3001;
+const distPath = path.resolve(__dirname, '..', 'dist');
+const SUPPORTED_ARTICLE_TYPES = new Set(['VASCA', 'SOLETTA']);
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -70,7 +73,7 @@ app.delete('/api/utenti/:id', (req, res) => {
 
 // Get all articoli
 app.get('/api/articoli', (req, res) => {
-    db.all("SELECT * FROM articoli", [], (err, rows) => {
+    db.all("SELECT * FROM articoli WHERE tipo IN ('VASCA', 'SOLETTA') OR tipo = 'COPERCHIO'", [], (err, rows) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -84,9 +87,8 @@ app.get('/api/articoli', (req, res) => {
             posizione: row.posizione,
             fila: row.fila,
             offsetInizio: row.offset_inizio,
-            tipo: row.tipo,
+            tipo: row.tipo === 'COPERCHIO' ? 'SOLETTA' : row.tipo,
             livello: row.livello,
-            dimBase: row.dim_base,
             colore: row.colore,
             stato: row.stato,
             dataCreazione: row.data_creazione
@@ -97,7 +99,8 @@ app.get('/api/articoli', (req, res) => {
 // Create a new articolo
 app.post('/api/articoli', (req, res) => {
     console.log('Ricevuta richiesta creazione articolo:', req.body);
-    const { id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello, dimBase } = req.body;
+    const { id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello } = req.body;
+    const normalizedType = SUPPORTED_ARTICLE_TYPES.has(tipo) ? tipo : 'VASCA';
 
     if (!codice) {
         console.error('Errore: codice mancante nella richiesta!');
@@ -117,12 +120,12 @@ app.post('/api/articoli', (req, res) => {
             return;
         }
 
-        const sql = `INSERT INTO articoli (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, dim_base, colore, stato, data_creazione) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const sql = `INSERT INTO articoli (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, colore, stato, data_creazione) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         const params = [
             id, codice, cliente, commessa, lunghezza,
             null, fila || null, offsetInizio || null,
-            tipo || 'VASCA', livello || 1, dimBase || null,
+            normalizedType, livello || 1,
             colore, stato, dataCreazione
         ];
 
@@ -243,6 +246,12 @@ app.delete('/api/registro', (req, res) => {
         }
         res.json({ message: 'Log svuotato correttamente' });
     });
+});
+
+app.use(express.static(distPath));
+
+app.get('/{*path}', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
 });
 
 app.listen(port, () => {
