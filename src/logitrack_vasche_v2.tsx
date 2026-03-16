@@ -196,6 +196,17 @@ const LogiTrackVasche = () => {
       console.error('Errore nel ripristino sessione utente:', err);
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const rawCategory = window.localStorage.getItem('logitrack_current_category');
+      if (rawCategory === 'VASCA' || rawCategory === 'SOLETTA') {
+        setCurrentCategory(rawCategory);
+      }
+    } catch (err) {
+      console.error('Errore nel ripristino categoria attiva:', err);
+    }
+  }, []);
   const normalizeSolettaStacks = useCallback((items: Articolo[]) => {
     const normalized = [...items];
     const byPile: Record<string, Articolo[]> = {};
@@ -579,6 +590,14 @@ const LogiTrackVasche = () => {
       console.error('Errore nel salvataggio sessione utente:', err);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('logitrack_current_category', currentCategory);
+    } catch (err) {
+      console.error('Errore nel salvataggio categoria attiva:', err);
+    }
+  }, [currentCategory]);
 
   const filteredUsers = useMemo(() => {
     return utenti
@@ -2119,24 +2138,64 @@ const LogiTrackVasche = () => {
           {/* MODALS */}
           {showCreateModal && (
             <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <h2 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}><Plus color="#3b82f6" /> Crea {CATEGORY_LABELS[currentCategory].singular}</h2>
-                <div className="form-group">
-                  <label className="form-label">Codice articolo</label>
-                  <input className="form-input" value={formData.codice} onChange={e => setFormData({ ...formData, codice: e.target.value })} placeholder="Es. VSC_001" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Cliente</label>
-                  <input className="form-input" value={formData.cliente} onChange={e => setFormData({ ...formData, cliente: e.target.value })} placeholder="Ragione sociale" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Commessa</label>
-                  <input className="form-input" value={formData.commessa} onChange={e => setFormData({ ...formData, commessa: e.target.value })} placeholder="COM_XXXX" />
-                </div>
+              <div className="modal" style={{ maxWidth: '680px' }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'grid', gap: '18px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                      Nuovo articolo
+                    </div>
+                    <h2 style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <Plus color="#3b82f6" /> Crea {CATEGORY_LABELS[currentCategory].singular}
+                    </h2>
+                    <p style={{ color: '#475569', lineHeight: 1.5 }}>
+                      Inserisci i dati identificativi del pezzo. Dopo la creazione l'articolo sar&#224; in attesa e potrai posizionarlo nel piazzale.
+                    </p>
+                  </div>
 
-                <div className="form-group">
-                  <label className="form-label">Lunghezza (metri)</label>
-                  <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 8.5" />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '14px' }}>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                        Dati identificativi
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '12px' }}>
+                        <label className="form-label">Codice articolo</label>
+                        <input className="form-input" value={formData.codice} onChange={e => setFormData({ ...formData, codice: e.target.value })} placeholder={currentCategory === 'VASCA' ? 'Es. VA7/70' : 'Es. SL_06_FEMMINA'} />
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>Usa il codice reale con cui il pezzo viene identificato in produzione o in commessa.</div>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '12px' }}>
+                        <label className="form-label">Cliente</label>
+                        <input className="form-input" value={formData.cliente} onChange={e => setFormData({ ...formData, cliente: e.target.value })} placeholder="Es. AGZ APPALTI" />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Commessa</label>
+                        <input className="form-input" value={formData.commessa} onChange={e => setFormData({ ...formData, commessa: e.target.value })} placeholder="Es. R2213/25" />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '8px' }}>
+                          Tipo in creazione
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+                          {CATEGORY_LABELS[currentCategory].plural}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#475569' }}>
+                          L'articolo verr&#224; creato come attivo, ma non ancora posizionato.
+                        </div>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">Lunghezza (metri)</label>
+                          <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 6.12" />
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                            Inserisci la misura in metri. Puoi usare valori decimali.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
                   <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowCreateModal(false)}>Annulla</button>
@@ -2149,24 +2208,54 @@ const LogiTrackVasche = () => {
           {solettaRelocationFlow && (
             <div className="modal-overlay">
               <div className="modal" style={{ maxWidth: '720px' }}>
-                <h2 style={{ fontSize: '20px', marginBottom: '12px' }}>Riposizionamento Solette</h2>
-                <p style={{ marginBottom: '8px', color: '#475569', lineHeight: 1.5 }}>
-                  {solettaRelocationFlow.finalAction === 'ship'
-                    ? <>Per scaricare <strong>{solettaRelocationFlow.target.codice}</strong>, riposiziona le solette sovrapposte una alla volta.</>
-                    : <>Per spostare <strong>{solettaRelocationFlow.target.codice}</strong> in <strong>pila {solettaRelocationFlow.destinationPile}</strong>, libera prima la pila corrente riposizionando le solette superiori.</>}
-                </p>
-                {solettaRelocationFlow.finalAction === 'move' && solettaRelocationFlow.destinationPile && (
-                  <p style={{ marginBottom: '16px', color: '#1d4ed8', fontWeight: 700 }}>
-                    Destinazione finale riservata: pila {solettaRelocationFlow.destinationPile}
-                  </p>
-                )}
-                <p style={{ marginBottom: '20px', color: '#64748b' }}>
-                  Passo {solettaRelocationFlow.currentIndex + 1} di {solettaRelocationFlow.blockers.length}
-                </p>
+                <div style={{ display: 'grid', gap: '14px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                      Procedura guidata
+                    </div>
+                    <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Riposizionamento solette</h2>
+                    <p style={{ color: '#475569', lineHeight: 1.5 }}>
+                      {solettaRelocationFlow.finalAction === 'ship'
+                        ? <>Stai preparando lo scarico di <strong>{solettaRelocationFlow.target.codice}</strong>. Prima devi spostare le solette che si trovano sopra.</>
+                        : <>Stai spostando <strong>{solettaRelocationFlow.target.codice}</strong> in <strong>pila {solettaRelocationFlow.destinationPile}</strong>. Prima devi liberare la pila attuale.</>}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '12px' }}>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
+                        Obiettivo finale
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+                        {solettaRelocationFlow.finalAction === 'ship'
+                          ? `Scaricare ${solettaRelocationFlow.target.codice}`
+                          : `Portare ${solettaRelocationFlow.target.codice} in pila ${solettaRelocationFlow.destinationPile}`}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b' }}>
+                        {solettaRelocationFlow.finalAction === 'ship'
+                          ? 'Appena completi i riposizionamenti, potrai confermare lo scarico.'
+                          : `La pila ${solettaRelocationFlow.destinationPile} resta riservata al pezzo selezionato.`}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
+                        Azione da fare adesso
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#475569', marginBottom: '6px' }}>
+                        Passo <strong>{solettaRelocationFlow.currentIndex + 1}</strong> di <strong>{solettaRelocationFlow.blockers.length}</strong>
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                        Clicca una pila verde per spostare <strong>{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.codice}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', marginBottom: '16px' }}>
                   <div
                     style={{
-                      width: `${((solettaRelocationFlow.currentIndex) / solettaRelocationFlow.blockers.length) * 100}%`,
+                      width: `${((solettaRelocationFlow.currentIndex + 1) / solettaRelocationFlow.blockers.length) * 100}%`,
                       height: '100%',
                       background: '#3b82f6'
                     }}
@@ -2174,14 +2263,25 @@ const LogiTrackVasche = () => {
                 </div>
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '20px' }}>
-                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                    Soletta da spostare: {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.codice}
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
+                    Soletta da riposizionare
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '18px', color: '#0f172a', marginBottom: '4px' }}>
+                    {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.codice}
                   </div>
                   <div style={{ color: '#64748b', fontSize: '14px' }}>
-                    Pila attuale: {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.fila} | Livello: L{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.livello}
+                    Attualmente in <strong>pila {solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.fila}</strong> al <strong>livello L{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.livello}</strong>
                   </div>
                 </div>
 
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    Pile disponibili per questo passaggio
+                  </div>
+                  <div style={{ padding: '8px 12px', borderRadius: '999px', background: '#dcfce7', border: '1px solid #86efac', color: '#166534', fontSize: '12px', fontWeight: 800 }}>
+                    Seleziona una pila libera
+                  </div>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px' }}>
                   {SOLETTA_PILES.map(pile => {
                     const isValid = validRelocationPiles.has(pile);
@@ -2191,11 +2291,13 @@ const LogiTrackVasche = () => {
                       className="btn btn-secondary"
                       style={{
                         justifyContent: 'center',
-                        padding: '10px',
-                        border: isValid ? '1px solid #86efac' : '1px solid #cbd5e1',
-                        background: isValid ? '#f0fdf4' : '#f1f5f9',
+                        padding: '12px 10px',
+                        border: isValid ? '2px solid #22c55e' : '1px solid #cbd5e1',
+                        background: isValid ? 'linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)' : '#f8fafc',
                         color: isValid ? '#166534' : '#94a3b8',
-                        opacity: isValid ? 1 : 0.7
+                        opacity: isValid ? 1 : 0.55,
+                        fontWeight: 800,
+                        boxShadow: isValid ? '0 8px 18px -14px rgba(34,197,94,0.75)' : 'none'
                       }}
                       disabled={!isValid}
                       onClick={() => handleSolettaRelocation(pile)}
@@ -2204,14 +2306,20 @@ const LogiTrackVasche = () => {
                     </button>
                   )})}
                 </div>
-                <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>
-                  Sono cliccabili solo le pile valide per questo passaggio.
-                  {solettaRelocationFlow.finalAction === 'move' && solettaRelocationFlow.destinationPile ? ' La pila finale resta riservata al pezzo selezionato.' : ''}
-                </p>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '10px' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '999px', background: '#22c55e', display: 'inline-block' }} />
+                    Disponibile
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '999px', background: '#cbd5e1', display: 'inline-block' }} />
+                    Non disponibile
+                  </div>
+                </div>
 
                 {solettaRelocationFlow.history.length > 0 && (
                   <div style={{ marginTop: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '8px' }}>Riepilogo Movimenti Eseguiti</div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '8px' }}>Passi gi&#224; completati</div>
                     <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'grid', gap: '6px' }}>
                       {solettaRelocationFlow.history.map((h, i) => (
                         <div key={`${h.codice}-${i}`} style={{ fontSize: '12px', color: '#475569' }}>
