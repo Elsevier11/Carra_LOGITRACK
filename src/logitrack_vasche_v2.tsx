@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, Plus, Trash2, Move, Package, AlertCircle, Check, X, Calendar, Clock, User, Hash, ChevronUp, ChevronDown, Waves, Layers3 } from 'lucide-react';
 
 const uuidv4 = () => {
@@ -108,21 +108,9 @@ const CATEGORY_LABELS = {
   SOLETTA: { tab: 'Solette', singular: 'soletta', plural: 'Solette' },
 } as const;
 
-const CATEGORY_THEME = {
-  VASCA: { color: '#2563eb', background: '#dbeafe', Icon: Waves },
-  SOLETTA: { color: '#f59e0b', background: '#fef3c7', Icon: Layers3 },
-} as const;
-
 /**
  * UI SUB-COMPONENTS
  */
-
-const StatCard = ({ label, value, color }: { label: string; value: string | number; color?: string }) => (
-  <div className="stat-card" style={color ? { borderLeftColor: color } : {}}>
-    <div className="stat-label">{label}</div>
-    <div className="stat-value">{value}</div>
-  </div>
-);
 
 const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: number } }) => (
   <div className="tooltip" style={{ left: pos.x + 20, top: pos.y - 20 }}>
@@ -155,25 +143,6 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
   </div>
 );
 
-const CategoryBadge = ({ category }: { category: 'VASCA' | 'SOLETTA' }) => {
-  const theme = CATEGORY_THEME[category];
-  const Icon = theme.Icon;
-
-  return (
-    <div className={`category-badge ${category.toLowerCase()}`}>
-      <div className="category-badge-icon" style={{ color: theme.color, background: theme.background }}>
-        <Icon size={18} />
-      </div>
-      <div>
-        <div className="category-badge-label">{CATEGORY_LABELS[category].plural}</div>
-        <div className="category-badge-subtitle">
-          {category === 'VASCA' ? 'Vista lineare delle file di piazzale' : 'Vista per pile e livelli'}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 /**
  * MAIN COMPONENT
  */
@@ -204,6 +173,7 @@ const LogiTrackVasche = () => {
   const [formData, setFormData] = useState({ codice: '', cliente: '', commessa: '', lunghezza: '' });
   const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [solettaRelocationFlow, setSolettaRelocationFlow] = useState<SolettaRelocationFlow | null>(null);
@@ -215,6 +185,16 @@ const LogiTrackVasche = () => {
     if (tipo === 'COPERCHIO') return 'SOLETTA';
     if (tipo === 'VASCA' || tipo === 'SOLETTA') return tipo;
     return null;
+  }, []);
+
+  useEffect(() => {
+    try {
+      const rawUser = window.localStorage.getItem('logitrack_current_user');
+      if (!rawUser) return;
+      setCurrentUser(JSON.parse(rawUser));
+    } catch (err) {
+      console.error('Errore nel ripristino sessione utente:', err);
+    }
   }, []);
   const normalizeSolettaStacks = useCallback((items: Articolo[]) => {
     const normalized = [...items];
@@ -584,6 +564,22 @@ const LogiTrackVasche = () => {
     inventoryListRef.current.scrollTop = 0;
   }, [selectedArticolo]);
 
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [activeTab, currentCategory]);
+
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        window.localStorage.setItem('logitrack_current_user', JSON.stringify(currentUser));
+      } else {
+        window.localStorage.removeItem('logitrack_current_user');
+      }
+    } catch (err) {
+      console.error('Errore nel salvataggio sessione utente:', err);
+    }
+  }, [currentUser]);
+
   const filteredUsers = useMemo(() => {
     return utenti
       .filter(u => userRoleFilter === 'ALL' || u.ruolo === userRoleFilter)
@@ -669,7 +665,7 @@ const LogiTrackVasche = () => {
     // Check for duplicate code locally
     const isDuplicate = articoli.some(v => v.codice.trim().toUpperCase() === codice.trim().toUpperCase());
     if (isDuplicate) {
-      alert(`Il codice articolo '${codice}' esiste già.`);
+      alert(`Il codice articolo '${codice}' esiste giÃ .`);
       return;
     }
 
@@ -787,7 +783,7 @@ const LogiTrackVasche = () => {
               const levelLabel = `L${up.livello}`;
               addLog('MOVIMENTAZIONE', up, `Caduta automatica in ${fila} @ ${posLabel} (${levelLabel})`);
             } catch (err) {
-              console.error(`Errore ricalcolo gravità per ${up.codice}:`, err);
+              console.error(`Errore ricalcolo gravitÃ  per ${up.codice}:`, err);
             }
           }
         }, 0);
@@ -876,7 +872,7 @@ const LogiTrackVasche = () => {
   const handlePositionArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'position') return;
 
-    // Per i pozzetti, l'offset passato è già lo slot (1-10)
+    // Per i pozzetti, l'offset passato Ã¨ giÃ  lo slot (1-10)
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, null, selectedArticolo.tipo);
     if (!check.available) {
       alert(`Errore: ${check.reason}`);
@@ -954,7 +950,7 @@ const LogiTrackVasche = () => {
     if (blockers.length === 0) {
       if (finalAction === 'ship') {
         setShowConfirmModal({
-          message: `Scaricare ${target.codice}? La posizione sarà liberata.`,
+          message: `Scaricare ${target.codice}? La posizione sarÃ  liberata.`,
           onConfirm: () => {
             executeShipArticolo(target);
             setShowConfirmModal(null);
@@ -1071,7 +1067,7 @@ const LogiTrackVasche = () => {
         v.livello > vasca.livello
       );
       if (itemAbove) {
-        alert(`Errore LIFO: impossibile scaricare. Sopra c'è ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}.`);
+        alert(`Errore LIFO: impossibile scaricare. Sopra c'Ã¨ ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}.`);
         return;
       }
     }
@@ -1109,31 +1105,12 @@ const LogiTrackVasche = () => {
       return;
     }
     setShowConfirmModal({
-      message: `Scaricare ${v.codice}? La posizione sarà liberata.`,
+      message: `Scaricare ${v.codice}? La posizione sarÃ  liberata.`,
       onConfirm: () => {
         executeShipArticolo(v);
         setShowConfirmModal(null);
       }
     });
-  };
-
-  const clearLog = async () => {
-    if (confirm('Pulire tutto il registro?')) {
-      try {
-        const res = await fetch('/api/registro', {
-          method: 'DELETE'
-        });
-        if (res.ok) {
-          setRegistro([]);
-        } else {
-          console.error('Failed to clear log:', await res.text());
-          alert('Errore nella pulizia del log.');
-        }
-      } catch (err) {
-        console.error('Errore nella pulizia del log:', err);
-        alert('Errore di rete o del server.');
-      }
-    }
   };
 
   const renderInventoryCard = (v: Articolo) => {
@@ -1159,25 +1136,6 @@ const LogiTrackVasche = () => {
           <div><strong>Lunghezza:</strong> {v.lunghezza}m</div>
           {v.posizione && <div><strong>Posizione:</strong> {v.posizione}</div>}
         </div>
-        {isSelected && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-            {v.stato === 'CREATA' && (
-              <button className="btn btn-success" style={{ flex: 1, padding: '8px' }} onClick={(e) => { e.stopPropagation(); setMode('position'); }}>
-                <Check size={14} /> Posiziona
-              </button>
-            )}
-            {v.stato === 'IN_AREA' && (
-              <>
-                <button className="btn btn-warning" style={{ flex: 1, padding: '8px' }} onClick={(e) => { e.stopPropagation(); setMode('move'); }}>
-                  <Move size={14} /> Sposta
-                </button>
-                <button className="btn btn-danger" style={{ flex: 1, padding: '8px' }} onClick={(e) => { e.stopPropagation(); handleScaricaArticolo(v); }}>
-                  <Trash2 size={14} /> Scarica
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
     );
   };
@@ -1191,33 +1149,37 @@ const LogiTrackVasche = () => {
         .app { max-width: 100%; margin: 0 auto; padding: 12px 16px; position: relative; }
         
         /* Layout Blocks */
-        .header { background: white; padding: 10px 14px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 8px; border-top: 3px solid #3b82f6; }
+        .header { background: white; padding: 12px 16px; border-radius: 14px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.45); margin-bottom: 10px; border-top: 3px solid #3b82f6; }
         .header h1 { font-size: 24px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
         .header p { color: #64748b; font-size: 14px; }
         .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .header-left { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-        .header-right { display: flex; align-items: center; gap: 10px; }
-        .user-chip { background: #eff6ff; color: #3b82f6; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; }
-        .logout-link { background: #f8fafc; border: 1px solid #dbe3ef; color: #64748b; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
-        
-        .stats { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
-        .stat-card { background: white; padding: 8px 10px; border-radius: 10px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-height: 56px; }
-        .stat-label { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
-        .stat-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1; }
-        
-        .controls { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
-        .action-bar { position: sticky; top: 6px; z-index: 30; background: #ffffffde; backdrop-filter: blur(8px); border: 1px solid #dbe3ef; border-radius: 12px; padding: 8px; box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.45); }
-        .action-left { flex: 1; min-width: 320px; }
-        .action-center { display: flex; align-items: center; gap: 8px; }
-        .action-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-        .search-box { flex: 1; min-width: 280px; display: flex; gap: 8px; }
+        .header-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .header-right { display: flex; align-items: center; gap: 10px; position: relative; }
+        .user-menu { position: relative; }
+        .user-menu-trigger { background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%); color: #1d4ed8; padding: 8px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; border: 1px solid #bfdbfe; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+        .user-menu-role { color: #64748b; font-weight: 700; }
+        .user-menu-panel { position: absolute; top: calc(100% + 10px); right: 0; width: 190px; background: white; border: 1px solid #dbe3ef; border-radius: 14px; box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.4); padding: 8px; z-index: 40; }
+        .user-menu-item { width: 100%; border: none; background: transparent; text-align: left; padding: 10px 12px; border-radius: 10px; color: #334155; font-size: 13px; font-weight: 700; cursor: pointer; }
+        .user-menu-item:hover { background: #f8fafc; }
+
+        .sidebar-panel { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+        .sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .sidebar-title { font-size: 18px; font-weight: 800; color: #0f172a; }
+        .sidebar-count { font-size: 14px; font-weight: 800; color: #94a3b8; }
+        .sidebar-actions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+        .sidebar-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+        .sidebar-badge { border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 800; border: 1px solid #dbe3ef; background: #f8fafc; color: #475569; white-space: nowrap; }
+        .sidebar-badge.in-area { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .sidebar-badge.created { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+        .search-stack { display: grid; gap: 8px; }
+        .search-box { display: flex; gap: 8px; }
         .search-container { position: relative; flex: 1; }
         .search-input { width: 100%; padding: 10px 36px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 13px; transition: border-color 0.2s; }
         .search-input:focus { outline: none; border-color: #3b82f6; }
         .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
         
-        .filter-tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
-        .filter-tab { padding: 7px 12px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: #64748b; transition: all 0.2s; }
+        .filter-tabs { display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 10px; width: 100%; }
+        .filter-tab { flex: 1; padding: 8px 10px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: #64748b; transition: all 0.2s; }
         .filter-tab.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
         .btn { padding: 10px 14px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
@@ -1228,19 +1190,19 @@ const LogiTrackVasche = () => {
         .btn-warning { background: #f59e0b; color: white; }
         .btn-danger { background: #ef4444; color: white; }
         
-        .nav-tabs { display: flex; gap: 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 10px; align-items: center; }
+        .nav-tabs { display: flex; gap: 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px; align-items: center; background: white; padding: 0 12px; border-radius: 14px 14px 0 0; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
         .nav-tab { padding: 8px 4px; font-weight: 700; font-size: 15px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
         .nav-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
         .mode-badge { margin-left: auto; font-size: 12px; font-weight: 700; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; }
         
         /* Linear Layout (Timeline) */
-        .content { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; }
-        .content.grid-focus { min-height: calc(100vh - 280px); align-items: stretch; }
+        .content { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; }
+        .content.grid-focus { min-height: calc(100vh - 190px); align-items: stretch; }
         .content.grid-focus .grid-section { display: flex; flex-direction: column; min-height: 0; }
         .content.grid-focus .grid-container { flex: 1; min-height: 0; overflow: auto; }
         .content.grid-focus .sidebar { display: flex; flex-direction: column; min-height: 0; }
         .content.grid-focus .vasca-list { flex: 1; min-height: 0; max-height: none; }
-        .grid-section { background: white; padding: 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .grid-section { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
         .grid-container { overflow-x: auto; padding: 4px; }
         
         .fila-row { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; padding: 6px; background: #f8fafc; border-radius: 12px; }
@@ -1301,25 +1263,29 @@ const LogiTrackVasche = () => {
         }
         
         /* Sidebar */
-        .sidebar { background: white; padding: 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .sidebar { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); border: 1px solid #e2e8f0; position: sticky; top: 10px; }
         .vasca-list { max-height: 600px; overflow-y: auto; padding-right: 6px; }
-        .vasca-card { padding: 12px; border: 2px solid #f1f5f9; border-radius: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+        .selection-card { position: sticky; top: 0; z-index: 6; background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%); border: 1px solid #bfdbfe; border-radius: 14px; padding: 12px; margin-bottom: 12px; box-shadow: 0 12px 24px -24px rgba(37,99,235,0.45); }
+        .selection-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+        .selection-card-title { font-size: 12px; font-weight: 800; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.3px; }
+        .selection-card-code { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+        .selection-card-grid { display: grid; gap: 6px; font-size: 13px; color: #475569; margin-bottom: 12px; }
+        .selection-actions { display: flex; gap: 8px; }
+        .vasca-card { padding: 10px 12px; border: 2px solid #f1f5f9; border-radius: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
         .vasca-card:hover { border-color: #cbd5e1; background: #f8fafc; }
         .vasca-card.selected { border-color: #3b82f6; background: #eff6ff; }
-        .vasca-info { font-size: 13px; color: #475569; margin-top: 10px; display: grid; gap: 4px; }
+        .vasca-info { font-size: 12px; color: #475569; margin-top: 8px; display: grid; gap: 3px; }
         .selection-pill { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 999px; letter-spacing: 0.2px; background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
         .status-pill { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 999px; border: 1px solid transparent; letter-spacing: 0.2px; }
         .status-pill.in-area { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
         .status-pill.created { background: #fef3c7; color: #92400e; border-color: #fde68a; }
         .status-pill.shipped { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
-        .inventory-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
-        .inventory-chip { border-radius: 10px; padding: 8px 10px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; color: #475569; background: #f8fafc; }
         .pile-column { display: flex; flex-direction: column; gap: 6px; }
         .pile-index { text-align: center; font-weight: 800; font-size: 13px; color: #0f172a; position: sticky; top: 0; background: #fff; border-radius: 6px; z-index: 3; }
         .pile-capacity { text-align: center; font-size: 11px; border: 1px solid; border-radius: 999px; padding: 4px 6px; font-weight: 700; }
         .quick-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; margin-bottom: 12px; }
         .quick-toggle input { accent-color: #3b82f6; }
-        .action-hint { font-size: 11px; color: #64748b; margin-bottom: 8px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .action-hint { font-size: 11px; color: #64748b; margin-bottom: 8px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
         .gravity-drop { animation: gravityDrop 0.45s ease-out; }
         @keyframes gravityDrop {
           0% { transform: translateY(-14px); }
@@ -1329,11 +1295,13 @@ const LogiTrackVasche = () => {
         .users-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
         .role-filter { padding: 8px 10px; border: 1px solid #dbe3ef; border-radius: 10px; background: #fff; color: #334155; font-size: 13px; }
         @media (max-width: 1100px) {
+          .header-top { align-items: flex-start; }
+          .header-right { width: 100%; justify-content: flex-end; }
           .content { grid-template-columns: 1fr; }
           .content.grid-focus { min-height: auto; }
           .users-layout { grid-template-columns: 1fr; }
-          .action-left { min-width: 100%; }
           .mode-badge { margin-left: 0; }
+          .search-box { flex-direction: column; }
         }
         
         /* Modals & Tooltips */
@@ -1376,11 +1344,6 @@ const LogiTrackVasche = () => {
         .product-tab.active { background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .product-tab.active.vasca { color: #3b82f6; }
         .product-tab.active.soletta { color: #f59e0b; }
-        .category-badge { display: flex; align-items: center; gap: 12px; border-radius: 14px; border: 1px solid #e2e8f0; background: white; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
-        .category-badge-icon { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
-        .category-badge-label { font-size: 15px; font-weight: 800; color: #0f172a; }
-        .category-badge-subtitle { font-size: 12px; color: #64748b; }
-        
         .faded { opacity: 0.25; filter: grayscale(0.5); }
       `}</style>
 
@@ -1412,7 +1375,7 @@ const LogiTrackVasche = () => {
                   className="form-input"
                   value={loginForm.password}
                   onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-                  placeholder="••••••••"
+                  placeholder="********"
                 />
               </div>
               {loginError && <p style={{ color: '#ef4444', fontSize: '12px', fontWeight: 700, marginTop: '-12px', marginBottom: '16px' }}>{loginError}</p>}
@@ -1458,103 +1421,45 @@ const LogiTrackVasche = () => {
               </div>
 
               <div className="header-right">
-                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Gestione piazzale</span>
-                {currentUser?.ruolo === 'ADMIN' && (
+                <div className="user-menu">
                   <button
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 12px', fontSize: '12px' }}
-                    onClick={() => setActiveTab('utenti')}
+                    className="user-menu-trigger"
+                    onClick={() => setIsUserMenuOpen(prev => !prev)}
                   >
-                    Utenti
+                    <User size={14} />
+                    <span>{currentUser?.username}</span>
+                    <span className="user-menu-role">{currentUser?.ruolo === 'ADMIN' ? 'Admin' : 'Operatore'}</span>
                   </button>
-                )}
-                <div className="user-chip">
-                  <User size={13} />
-                  {currentUser?.username.toUpperCase()}
+                  {isUserMenuOpen && (
+                    <div className="user-menu-panel">
+                      {currentUser?.ruolo === 'ADMIN' && (
+                        <button
+                          className="user-menu-item"
+                          onClick={() => {
+                            setActiveTab('utenti');
+                            setIsUserMenuOpen(false);
+                          }}
+                        >
+                          Utenti
+                        </button>
+                      )}
+                      <button
+                        className="user-menu-item"
+                        onClick={() => {
+                          setCurrentUser(null);
+                          setLoginForm({ username: '', password: '' });
+                          setLoginError('');
+                          setIsUserMenuOpen(false);
+                        }}
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button
-                  className="logout-link"
-                  onClick={() => { setCurrentUser(null); setLoginForm({ username: '', password: '' }); setLoginError(''); }}
-                >
-                  Logout
-                </button>
               </div>
             </div>
           </header>
-
-          {activeTab === 'grid' && (
-            <>
-              <CategoryBadge category={currentCategory} />
-              <div className="stats" style={{ position: 'relative', zIndex: 1 }}>
-                <StatCard label={`${CATEGORY_LABELS[currentCategory].plural} attive`} value={activeArticoli.length} />
-                <StatCard label="In piazzale" value={activeArticoli.filter(v => v.stato === 'IN_AREA').length} color="#10b981" />
-                <StatCard label="In attesa" value={activeArticoli.filter(v => v.stato === 'CREATA').length} color="#f59e0b" />
-              </div>
-
-              <div className="controls action-bar">
-                <div className="search-box action-left">
-                  <div className="search-container">
-                    <Search className="search-icon" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Cerca cliente..."
-                      className="search-input"
-                      value={searchCliente}
-                      onChange={(e) => setSearchCliente(e.target.value)}
-                      onFocus={() => setShowClienteSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
-                    />
-                    {showClienteSuggestions && clienteSuggestions.length > 0 && (
-                      <div className="suggestions-list">
-                        <div className="suggestion-header">Clienti trovati</div>
-                        {clienteSuggestions.map(s => (
-                          <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
-                            {s}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="search-container">
-                    <Search className="search-icon" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Cerca commessa..."
-                      className="search-input"
-                      value={searchCommessa}
-                      onChange={(e) => setSearchCommessa(e.target.value)}
-                      onFocus={() => setShowCommessaSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowCommessaSuggestions(false), 200)}
-                    />
-                    {showCommessaSuggestions && commessaSuggestions.length > 0 && (
-                      <div className="suggestions-list">
-                        <div className="suggestion-header">Commesse trovate</div>
-                        {commessaSuggestions.map(s => (
-                          <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
-                            {s}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="filter-tabs action-center">
-                  {(['all', 'in_area', 'creata'] as const).map((t) => (
-                    <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
-                      {t === 'all' ? 'Attive' : t === 'in_area' ? 'In piazzale' : 'Da posizionare'}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="action-right">
-                  <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                    <Plus size={18} /> Crea {CATEGORY_LABELS[currentCategory].singular}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
 
           {/* NAVIGATION */}
           <div className="nav-tabs" style={{ position: 'relative', zIndex: 1 }}>
@@ -1709,7 +1614,7 @@ const LogiTrackVasche = () => {
                       {/* --- SEZIONE ORIZZONTALE / SOLETTE --- */}
                       <div className="horizontal-tracks-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {currentCategory === 'SOLETTA' ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(84px, 1fr))', gap: '10px', alignItems: 'end' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(112px, 1fr))', gap: '10px', alignItems: 'end' }}>
                             {SOLETTA_PILES.map((pile, index) => {
                               const pileItems = [...(articoliPerFila[pile] || [])].sort((a, b) => a.livello - b.livello);
                               const occupiedLevels = pileItems.length;
@@ -1775,9 +1680,10 @@ const LogiTrackVasche = () => {
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            fontSize: '10px',
+                                            fontSize: '9px',
                                             fontWeight: 800,
-                                            color: '#fff'
+                                            color: '#fff',
+                                            padding: '0 14px 0 6px'
                                           }}
                                           onClick={(e: any) => {
                                             e.stopPropagation();
@@ -1786,7 +1692,7 @@ const LogiTrackVasche = () => {
                                           onMouseEnter={() => setHoveredArticolo(v)}
                                           onMouseLeave={() => setHoveredArticolo(null)}
                                         >
-                                          <span>{v.codice.slice(-6)}</span>
+                                          <span style={{ width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.codice}>{v.codice}</span>
                                           <span style={{ position: 'absolute', right: '6px', top: '2px', fontSize: '9px', opacity: 0.9 }}>L{v.livello}</span>
                                         </div>
                                       );
@@ -1906,26 +1812,117 @@ const LogiTrackVasche = () => {
                 </div>
 
                 <div className="sidebar">
-                  <h2 style={{ fontSize: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
-                    {CATEGORY_LABELS[currentCategory].plural} visibili <span style={{ color: '#94a3b8' }}>{filteredVasche.length}</span>
-                  </h2>
                   {selectedArticolo && (
-                    <div className="action-hint">
-                      Selezionato: <strong>{selectedArticolo.codice}</strong> {mode === 'view'
-                        ? <>| Azioni disponibili: {selectedArticolo.stato === 'CREATA'
-                          ? <><strong>P</strong> posiziona</>
-                          : <><strong>M</strong> sposta, <strong>S</strong> scarica</>} | <strong>Esc</strong> annulla.</>
-                        : <>| Conferma una posizione sulla planimetria o premi <strong>Esc</strong> per annullare.</>}
+                    <div className="selection-card">
+                      <div className="selection-card-head">
+                        <div className="selection-card-title">Selezionato</div>
+                        <span className={getStatusMeta(selectedArticolo.stato).className}>{getStatusMeta(selectedArticolo.stato).label}</span>
+                      </div>
+                      <div className="selection-card-code">{selectedArticolo.codice}</div>
+                      <div className="selection-card-grid">
+                        <div><strong>Cliente:</strong> {selectedArticolo.cliente}</div>
+                        <div><strong>Commessa:</strong> {selectedArticolo.commessa}</div>
+                        <div><strong>Lunghezza:</strong> {selectedArticolo.lunghezza}m</div>
+                        {selectedArticolo.posizione && <div><strong>Posizione:</strong> {selectedArticolo.posizione}</div>}
+                      </div>
+                      {mode === 'view' ? (
+                        <div className="selection-actions">
+                          {selectedArticolo.stato === 'CREATA' && (
+                            <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('position')}>
+                              <Check size={14} /> Posiziona
+                            </button>
+                          )}
+                          {selectedArticolo.stato === 'IN_AREA' && (
+                            <>
+                              <button className="btn btn-warning" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('move')}>
+                                <Move size={14} /> Sposta
+                              </button>
+                              <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleScaricaArticolo(selectedArticolo)}>
+                                <Trash2 size={14} /> Scarica
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="action-hint" style={{ marginBottom: 0 }}>
+                          Conferma una posizione sulla planimetria o premi <strong>Esc</strong> per annullare.
+                        </div>
+                      )}
                     </div>
                   )}
+                  <div className="sidebar-panel">
+                    <div className="sidebar-head">
+                      <div className="sidebar-title">{CATEGORY_LABELS[currentCategory].plural}</div>
+                      <div className="sidebar-count">{filteredVasche.length}</div>
+                    </div>
+                    <div className="sidebar-actions">
+                      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowCreateModal(true)}>
+                        <Plus size={18} /> Crea {CATEGORY_LABELS[currentCategory].singular}
+                      </button>
+                      <div className="sidebar-badges">
+                        <div className="sidebar-badge">{activeArticoli.length} attive</div>
+                        <div className="sidebar-badge in-area">{activeArticoli.filter(v => v.stato === 'IN_AREA').length} in piazzale</div>
+                        <div className="sidebar-badge created">{activeArticoli.filter(v => v.stato === 'CREATA').length} in attesa</div>
+                      </div>
+                      <div className="search-stack">
+                        <div className="search-container">
+                          <Search className="search-icon" size={18} />
+                          <input
+                            type="text"
+                            placeholder="Filtra per cliente..."
+                            className="search-input"
+                            value={searchCliente}
+                            onChange={(e) => setSearchCliente(e.target.value)}
+                            onFocus={() => setShowClienteSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
+                          />
+                          {showClienteSuggestions && clienteSuggestions.length > 0 && (
+                            <div className="suggestions-list">
+                              <div className="suggestion-header">Clienti trovati</div>
+                              {clienteSuggestions.map(s => (
+                                <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
+                                  {s}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="search-container">
+                          <Search className="search-icon" size={18} />
+                          <input
+                            type="text"
+                            placeholder="Filtra per commessa..."
+                            className="search-input"
+                            value={searchCommessa}
+                            onChange={(e) => setSearchCommessa(e.target.value)}
+                            onFocus={() => setShowCommessaSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowCommessaSuggestions(false), 200)}
+                          />
+                          {showCommessaSuggestions && commessaSuggestions.length > 0 && (
+                            <div className="suggestions-list">
+                              <div className="suggestion-header">Commesse trovate</div>
+                              {commessaSuggestions.map(s => (
+                                <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
+                                  {s}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="filter-tabs">
+                        {(['all', 'in_area', 'creata'] as const).map((t) => (
+                          <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
+                            {t === 'all' ? 'Attive' : t === 'in_area' ? 'In piazzale' : 'Da posizionare'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                   <label className="quick-toggle">
                     <input type="checkbox" checked={onlyActionable} onChange={e => setOnlyActionable(e.target.checked)} />
                     Mostra solo articoli utilizzabili in questa modalità
                   </label>
-                  <div className="inventory-meta">
-                    <div className="inventory-chip">In piazzale: {filteredVasche.filter(v => v.stato === 'IN_AREA').length}</div>
-                    <div className="inventory-chip">In attesa: {filteredVasche.filter(v => v.stato === 'CREATA').length}</div>
-                  </div>
                   <div className="vasca-list" ref={inventoryListRef}>
                     {groupedFilteredArticoli.inArea.length > 0 && (
                       <>
@@ -1947,9 +1944,6 @@ const LogiTrackVasche = () => {
             <div className="grid-section" style={{ position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <h2 style={{ fontSize: '18px' }}>Registro operazioni</h2>
-                <button className="btn btn-secondary" onClick={clearLog}>
-                  Svuota registro
-                </button>
               </div>
               <table className="log-table">
                 <thead>
@@ -2261,3 +2255,5 @@ const LogiTrackVasche = () => {
 };
 
 export default LogiTrackVasche;
+
+
