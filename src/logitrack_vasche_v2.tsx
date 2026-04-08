@@ -71,6 +71,7 @@ interface SolettaRelocationFlow {
 const SOLETTA_PILES = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
 const SOLETTA_MAX_LEVELS = 10;
 const SOLETTA_LEVEL_HEIGHT_PX = 20;
+const SOLETTA_DEFAULT_LENGTH = 2;
 
 const GRID_CONFIGS: Record<'VASCA' | 'SOLETTA', GridConfig> = {
   VASCA: {
@@ -126,10 +127,12 @@ const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: n
       <span className="tooltip-label">Commessa:</span>
       <span className="tooltip-value">{vasca.commessa}</span>
     </div>
-    <div className="tooltip-row">
-      <span className="tooltip-label">Lunghezza:</span>
-      <span className="tooltip-value">{vasca.lunghezza}m</span>
-    </div>
+    {vasca.tipo !== 'SOLETTA' && (
+      <div className="tooltip-row">
+        <span className="tooltip-label">Lunghezza:</span>
+        <span className="tooltip-value">{vasca.lunghezza}m</span>
+      </div>
+    )}
     <div className="tooltip-row">
       <span className="tooltip-label">Posizione:</span>
       <span className="tooltip-value">{vasca.posizione || 'Non posizionato'}</span>
@@ -179,6 +182,40 @@ const LogiTrackVasche = () => {
   const [solettaRelocationFlow, setSolettaRelocationFlow] = useState<SolettaRelocationFlow | null>(null);
   const [onlyActionable, setOnlyActionable] = useState(false);
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<string[]>([]);
+  const flowTargetId = solettaRelocationFlow?.target.id;
+  const flowCurrentBlockerId = solettaRelocationFlow?.blockers[solettaRelocationFlow.currentIndex]?.id;
+  const flowBlockerIds = new Set<string>();
+  solettaRelocationFlow?.blockers.forEach(blocker => flowBlockerIds.add(blocker.id));
+
+  const getFlowClasses = (articolo: Articolo) => {
+    if (!solettaRelocationFlow) return '';
+    const classes: string[] = [];
+    if (flowTargetId === articolo.id) classes.push('flow-target');
+    if (flowCurrentBlockerId === articolo.id) classes.push('flow-current');
+    else if (flowBlockerIds.has(articolo.id)) classes.push('flow-blocker');
+    return classes.join(' ');
+  };
+  const currentFlowStep = solettaRelocationFlow?.blockers[solettaRelocationFlow.currentIndex];
+  const flowSteps = solettaRelocationFlow
+    ? solettaRelocationFlow.blockers.map((blocker, index) => {
+        const status = index < solettaRelocationFlow.currentIndex
+          ? 'done'
+          : index === solettaRelocationFlow.currentIndex
+            ? 'current'
+            : 'pending';
+        return {
+          id: blocker.codice,
+          number: index + 1,
+          pile: blocker.fila ?? 'pila attuale',
+          level: blocker.livello,
+          status,
+          statusLabel: status === 'done' ? 'Completata' : status === 'current' ? 'Da spostare ora' : 'In attesa'
+        };
+      })
+    : [];
+  const flowInstructionText = currentFlowStep
+    ? `Sposta prima ${currentFlowStep.codice} (${currentFlowStep.fila ?? 'pila attuale'}, L${currentFlowStep.livello})`
+    : 'Segui la sequenza per liberare la pila.';
   const inventoryListRef = useRef<HTMLDivElement | null>(null);
   const visibleCategories = useMemo(() => (['VASCA', 'SOLETTA'] as const), []);
   const normalizeTipo = useCallback((tipo: string): Articolo['tipo'] | null => {
@@ -676,8 +713,9 @@ const LogiTrackVasche = () => {
   // --- Handlers ---
   const handleCreateArticolo = async () => {
     const { codice, cliente, commessa, lunghezza } = formData;
-    if (!codice || !cliente || !commessa || !lunghezza) {
-      alert('Tutti i campi sono obbligatori');
+    const isSoletta = currentCategory === 'SOLETTA';
+    if (!codice || !cliente || !commessa || (!isSoletta && !lunghezza)) {
+      alert('Tutti i campi obbligatori devono essere compilati');
       return;
     }
 
@@ -688,9 +726,10 @@ const LogiTrackVasche = () => {
       return;
     }
 
-    const normalizedLunghezza = lunghezza.toString().replace(',', '.');
-    const numLunghezza = Number(normalizedLunghezza);
-    if (isNaN(numLunghezza) || numLunghezza <= 0) {
+    const numLunghezza = isSoletta
+      ? SOLETTA_DEFAULT_LENGTH
+      : Number(lunghezza.toString().replace(',', '.'));
+    if (!isSoletta && (isNaN(numLunghezza) || numLunghezza <= 0)) {
       alert('La lunghezza deve essere un numero valido maggiore di zero');
       return;
     }
@@ -1152,7 +1191,9 @@ const LogiTrackVasche = () => {
         <div className="vasca-info">
           <div><strong>Cliente:</strong> {v.cliente}</div>
           <div><strong>Commessa:</strong> {v.commessa}</div>
-          <div><strong>Lunghezza:</strong> {v.lunghezza}m</div>
+                        {v.tipo !== 'SOLETTA' && (
+                          <div><strong>Lunghezza:</strong> {v.lunghezza}m</div>
+                        )}
           {v.posizione && <div><strong>Posizione:</strong> {v.posizione}</div>}
         </div>
       </div>
@@ -1257,11 +1298,14 @@ const LogiTrackVasche = () => {
           text-overflow: ellipsis;
           padding: 0 8px;
         }
-        .vasca-block:hover { transform: translateY(-2px); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .vasca-block.selected { border: 3px solid #f59e0b; }
-        
-        .ghost-block {
-          position: absolute;
+          .vasca-block:hover { transform: translateY(-2px); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+          .vasca-block.selected { border: 3px solid #f59e0b; }
+          .vasca-block.flow-blocker { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45), 0 10px 20px -15px rgba(59, 130, 246, 0.7); }
+          .vasca-block.flow-current { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.75), 0 12px 24px -16px rgba(16, 185, 129, 0.65); }
+          .vasca-block.flow-target { outline: 2px dashed rgba(249, 115, 22, 0.6); outline-offset: -2px; }
+
+          .ghost-block {
+            position: absolute;
           height: 80%;
           top: 10%;
           border-radius: 6px;
@@ -1510,9 +1554,12 @@ const LogiTrackVasche = () => {
                     <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>
                       {mode === 'position' ? 'Posizionamento attivo' : 'Spostamento attivo'}
                     </div>
-                    <div style={{ fontSize: '14px' }}>
-                      Seleziona una posizione libera per <strong>{selectedArticolo?.codice}</strong> ({selectedArticolo?.lunghezza}m)
-                    </div>
+                      <div style={{ fontSize: '14px' }}>
+                        Seleziona una posizione libera per <strong>{selectedArticolo?.codice}</strong>
+                        {selectedArticolo?.tipo !== 'SOLETTA' && (
+                          <> ({selectedArticolo?.lunghezza}m)</>
+                        )}
+                      </div>
                     <button
                       className="btn btn-secondary"
                       style={{ marginTop: '12px', padding: '8px 16px', fontSize: '13px' }}
@@ -1593,7 +1640,7 @@ const LogiTrackVasche = () => {
                                   return (
                                     <div
                                       key={v.id}
-                                      className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''}`}
+                                      className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${getFlowClasses(v)}`}
                                       style={{
                                         left: 2,
                                         bottom: (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
@@ -1633,108 +1680,127 @@ const LogiTrackVasche = () => {
                       {/* --- SEZIONE ORIZZONTALE / SOLETTE --- */}
                       <div className="horizontal-tracks-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {currentCategory === 'SOLETTA' ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(112px, 1fr))', gap: '10px', alignItems: 'end' }}>
-                            {SOLETTA_PILES.map((pile, index) => {
-                              const pileItems = [...(articoliPerFila[pile] || [])].sort((a, b) => a.livello - b.livello);
-                              const occupiedLevels = pileItems.length;
-                              const pileLoadStyle = getPileLoadStyle(occupiedLevels);
-                              return (
-                                <div key={pile} className="pile-column">
-                                  <div className="pile-index">{index + 1}</div>
+                          (() => {
+                            const rows: string[][] = [];
+                            for (let i = 0; i < SOLETTA_PILES.length; i += 6) {
+                              rows.push(SOLETTA_PILES.slice(i, i + 6));
+                            }
+                            return (
+                              <div style={{ display: 'grid', gap: '14px' }}>
+                                {rows.map((row, rowIndex) => (
                                   <div
-                                    className="fila-track"
+                                    key={`sol-row-${rowIndex}`}
                                     style={{
-                                      width: '100%',
-                                      height: `${SOLETTA_MAX_LEVELS * SOLETTA_LEVEL_HEIGHT_PX + 4}px`,
-                                      background: '#f8fafc',
-                                      position: 'relative'
+                                      display: 'grid',
+                                      gridTemplateColumns: 'repeat(6, minmax(140px, 1fr))',
+                                      gap: '12px',
+                                      alignItems: 'end'
                                     }}
-                                    onClick={() => {
-                                      if (mode === 'position') handlePositionArticolo(pile, 0);
-                                      if (mode === 'move') handleMoveArticolo(pile, 0);
-                                    }}
-                                    onMouseMove={() => {
-                                      if (mode === 'view') return;
-                                      setGhostPosition(`${pile}:0`);
-                                    }}
-                                    onMouseLeave={() => setGhostPosition(null)}
                                   >
-                                    {Array.from({ length: SOLETTA_MAX_LEVELS + 1 }).map((_, i) => (
-                                      <div
-                                        key={`${pile}-lv-${i}`}
-                                        style={{
-                                          position: 'absolute',
-                                          bottom: i * SOLETTA_LEVEL_HEIGHT_PX,
-                                          width: '100%',
-                                          borderTop: '1px dashed #dbe3ef',
-                                          pointerEvents: 'none'
-                                        }}
-                                      />
-                                    ))}
-
-                                    {pileItems.map((v: Articolo) => {
-                                      const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
-                                      let isFaded = false;
-                                      if (isAnyFilterActive) {
-                                        const matchesSearch =
-                                          v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
-                                          v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                                        const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
-                                        if (!(matchesSearch && matchesSelection)) isFaded = true;
-                                      }
-
+                                    {row.map((pile, index) => {
+                                      const pileItems = [...(articoliPerFila[pile] || [])].sort((a, b) => a.livello - b.livello);
+                                      const occupiedLevels = pileItems.length;
+                                      const pileLoadStyle = getPileLoadStyle(occupiedLevels);
                                       return (
-                                        <div
-                                          key={v.id}
-                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''}`}
-                                          style={{
-                                            left: '3px',
-                                            top: 'auto',
-                                            width: 'calc(100% - 6px)',
-                                            height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
-                                            bottom: `${(v.livello - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`,
-                                            backgroundColor: v.colore,
-                                            opacity: isFaded ? 0.35 : 1,
-                                            zIndex: 10 + (v.livello || 1),
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontSize: '9px',
-                                            fontWeight: 800,
-                                            color: '#fff',
-                                            padding: '0 14px 0 6px'
-                                          }}
-                                          onClick={(e: any) => {
-                                            e.stopPropagation();
-                                            setSelectedArticolo(v);
-                                          }}
-                                          onMouseEnter={() => setHoveredArticolo(v)}
-                                          onMouseLeave={() => setHoveredArticolo(null)}
-                                        >
-                                          <span style={{ width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.codice}>{v.codice}</span>
-                                          <span style={{ position: 'absolute', right: '6px', top: '2px', fontSize: '9px', opacity: 0.9 }}>L{v.livello}</span>
+                                        <div key={pile} className="pile-column">
+                                          <div className="pile-index">{rowIndex * 6 + index + 1}</div>
+                                          <div
+                                            className="fila-track"
+                                            style={{
+                                              width: '100%',
+                                              height: `${SOLETTA_MAX_LEVELS * SOLETTA_LEVEL_HEIGHT_PX + 4}px`,
+                                              background: '#f8fafc',
+                                              position: 'relative'
+                                            }}
+                                            onClick={() => {
+                                              if (mode === 'position') handlePositionArticolo(pile, 0);
+                                              if (mode === 'move') handleMoveArticolo(pile, 0);
+                                            }}
+                                            onMouseMove={() => {
+                                              if (mode === 'view') return;
+                                              setGhostPosition(`${pile}:0`);
+                                            }}
+                                            onMouseLeave={() => setGhostPosition(null)}
+                                          >
+                                            {Array.from({ length: SOLETTA_MAX_LEVELS + 1 }).map((_, i) => (
+                                              <div
+                                                key={`${pile}-lv-${i}`}
+                                                style={{
+                                                  position: 'absolute',
+                                                  bottom: i * SOLETTA_LEVEL_HEIGHT_PX,
+                                                  width: '100%',
+                                                  borderTop: '1px dashed #dbe3ef',
+                                                  pointerEvents: 'none'
+                                                }}
+                                              />
+                                            ))}
+
+                                            {pileItems.map((v: Articolo) => {
+                                              const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
+                                              let isFaded = false;
+                                              if (isAnyFilterActive) {
+                                                const matchesSearch =
+                                                  v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
+                                                  v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+                                                const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
+                                                if (!(matchesSearch && matchesSelection)) isFaded = true;
+                                              }
+                                              return (
+                                                <div
+                                                  key={v.id}
+                                                  className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''} ${getFlowClasses(v)}`}
+                                                  style={{
+                                                    left: '3px',
+                                                    top: 'auto',
+                                                    width: 'calc(100% - 6px)',
+                                                    height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
+                                                    bottom: `${(v.livello - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`,
+                                                    backgroundColor: v.colore,
+                                                    opacity: isFaded ? 0.35 : 1,
+                                                    zIndex: 10 + (v.livello || 1),
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '9px',
+                                                    fontWeight: 800,
+                                                    color: '#fff',
+                                                    padding: '0 14px 0 6px'
+                                                  }}
+                                                  onClick={(e: any) => {
+                                                    e.stopPropagation();
+                                                    setSelectedArticolo(v);
+                                                  }}
+                                                  onMouseEnter={() => setHoveredArticolo(v)}
+                                                  onMouseLeave={() => setHoveredArticolo(null)}
+                                                >
+                                                  <span style={{ width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.codice}>{v.codice}</span>
+                                                  <span style={{ position: 'absolute', right: '6px', top: '2px', fontSize: '9px', opacity: 0.9 }}>L{v.livello}</span>
+                                                </div>
+                                              );
+                                            })}
+
+                                            {ghostData && ghostData.fila === pile && (
+                                              <div
+                                                className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
+                                                style={{
+                                                  left: '3px',
+                                                  top: 'auto',
+                                                  width: 'calc(100% - 6px)',
+                                                  height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
+                                                  bottom: `${((ghostData.nextLevel || 1) - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`
+                                                }}
+                                              />
+                                            )}
+                                          </div>
+                                          <div className="pile-capacity" style={pileLoadStyle}>{occupiedLevels}/{SOLETTA_MAX_LEVELS}</div>
                                         </div>
                                       );
                                     })}
-
-                                    {ghostData && ghostData.fila === pile && (
-                                      <div
-                                        className={`ghost-block ${!ghostData.isValid ? 'invalid' : ''}`}
-                                        style={{
-                                          left: '3px',
-                                          top: 'auto',
-                                          width: 'calc(100% - 6px)',
-                                          height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
-                                          bottom: `${((ghostData.nextLevel || 1) - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`
-                                        }}
-                                      />
-                                    )}
                                   </div>
-                                  <div className="pile-capacity" style={pileLoadStyle}>{occupiedLevels}/{SOLETTA_MAX_LEVELS}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                ))}
+                              </div>
+                            );
+                          })()
                         ) : (
                           <>
                             {currentGridConfig.rows.map((fila: string) => {
@@ -1782,7 +1848,7 @@ const LogiTrackVasche = () => {
                                       return (
                                         <div
                                           key={v.id}
-                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''}`}
+                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''} ${getFlowClasses(v)}`}
                                           style={{
                                             left: isScaledVascaLayout ? `${(((v.offsetInizio || 0) / filaLength) * 100)}%` : (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
                                             width: isScaledVascaLayout ? `${((v.lunghezza / filaLength) * 100)}%` : v.lunghezza * currentGridConfig.pixelsPerMeter,
@@ -1841,7 +1907,9 @@ const LogiTrackVasche = () => {
                       <div className="selection-card-grid">
                         <div><strong>Cliente:</strong> {selectedArticolo.cliente}</div>
                         <div><strong>Commessa:</strong> {selectedArticolo.commessa}</div>
-                        <div><strong>Lunghezza:</strong> {selectedArticolo.lunghezza}m</div>
+                        {selectedArticolo.tipo !== 'SOLETTA' && (
+                          <div><strong>Lunghezza:</strong> {selectedArticolo.lunghezza}m</div>
+                        )}
                         {selectedArticolo.posizione && <div><strong>Posizione:</strong> {selectedArticolo.posizione}</div>}
                       </div>
                       {mode === 'view' ? (
@@ -2185,15 +2253,17 @@ const LogiTrackVasche = () => {
                         </div>
                       </div>
 
-                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label">Lunghezza (metri)</label>
-                          <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 6.12" />
-                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-                            Inserisci la misura in metri. Puoi usare valori decimali.
+                      {currentCategory !== 'SOLETTA' && (
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">Lunghezza (metri)</label>
+                            <input type="number" className="form-input" value={formData.lunghezza} onChange={e => setFormData({ ...formData, lunghezza: e.target.value })} placeholder="Es. 6.12" />
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                              Inserisci la misura in metri. Puoi usare valori decimali.
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2252,15 +2322,53 @@ const LogiTrackVasche = () => {
                   </div>
                 </div>
 
-                <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', marginBottom: '16px' }}>
+        <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', marginBottom: '16px' }}>
+          <div
+            style={{
+              width: `${((solettaRelocationFlow.currentIndex + 1) / solettaRelocationFlow.blockers.length) * 100}%`,
+              height: '100%',
+              background: '#3b82f6'
+            }}
+          />
+        </div>
+
+        {flowSteps.length > 0 && (
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '18px', display: 'grid', gap: '10px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              Ordine consigliato
+            </div>
+            <div style={{ fontSize: '14px', color: '#475569' }}>
+              {flowInstructionText} per liberare <strong>{solettaRelocationFlow.target.codice}</strong> dalla pila {solettaRelocationFlow.target.fila ?? 'attuale'}.
+            </div>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {flowSteps.map(step => {
+                const bg = step.status === 'done' ? '#dcfce7' : step.status === 'current' ? '#e0f2fe' : '#f8fafc';
+                const border = step.status === 'current' ? '#93c5fd' : '#e2e8f0';
+                return (
                   <div
+                    key={`${step.id}-${step.number}`}
                     style={{
-                      width: `${((solettaRelocationFlow.currentIndex + 1) / solettaRelocationFlow.blockers.length) * 100}%`,
-                      height: '100%',
-                      background: '#3b82f6'
+                      borderRadius: '10px',
+                      border: `1px solid ${border}`,
+                      background: bg,
+                      padding: '10px 12px'
                     }}
-                  />
-                </div>
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>
+                        Passo {step.number}: {step.id}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#475569' }}>{step.statusLabel}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                      Pila {step.pile} &middot; Livello L{step.level}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
