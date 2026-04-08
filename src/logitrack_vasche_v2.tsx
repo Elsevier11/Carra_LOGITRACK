@@ -1262,8 +1262,21 @@ const LogiTrackVasche = () => {
         .content.grid-focus .grid-container { flex: 1; min-height: 0; overflow: auto; }
         .content.grid-focus .sidebar { display: flex; flex-direction: column; min-height: 0; }
         .content.grid-focus .vasca-list { flex: 1; min-height: 0; max-height: none; }
-        .grid-section { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
-        .grid-container { overflow-x: auto; padding: 4px; }
+          .grid-section { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
+          .grid-container { overflow-x: auto; padding: 4px; }
+          .relocation-banner {
+            grid-column: span 2;
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #92400e;
+          }
         
         .fila-row { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; padding: 6px; background: #f8fafc; border-radius: 12px; }
         .fila-label { font-weight: 800; font-size: 16px; color: #1e293b; text-align: center; }
@@ -1571,7 +1584,17 @@ const LogiTrackVasche = () => {
                 </div>
               )}
 
-              <div className="content grid-focus" style={{ position: 'relative', zIndex: 1 }}>
+                <div className="content grid-focus" style={{ position: 'relative', zIndex: 1 }}>
+                  {solettaRelocationFlow && (
+                    <div className="relocation-banner">
+                      <div>
+                        <strong>Passo {solettaRelocationFlow.currentIndex + 1}</strong> di <strong>{solettaRelocationFlow.blockers.length}</strong> – sposta <strong>{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.codice}</strong> dalla pila <strong>{solettaRelocationFlow.blockers[solettaRelocationFlow.currentIndex]?.fila}</strong>.
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#475569' }}>
+                        Il sistema ti guida: scegli una pila verde qui sotto, sposta la cima libera e ripeti fino a liberare <strong>{solettaRelocationFlow.target.codice}</strong>.
+                      </div>
+                    </div>
+                  )}
                 <div className="grid-section">
                   {currentCategory === 'SOLETTA' ? (
                     <div className="ruler" style={{ justifyContent: 'space-between' }}>
