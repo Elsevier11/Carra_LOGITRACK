@@ -169,6 +169,7 @@ const LogiTrackVasche = () => {
   const [selectedArticolo, setSelectedArticolo] = useState<Articolo | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState<{ title?: string; message: string } | null>(null);
   const [mode, setMode] = useState<'view' | 'position' | 'move'>('view');
   const [ghostPosition, setGhostPosition] = useState<string | null>(null);
   const [hoveredArticolo, setHoveredArticolo] = useState<Articolo | null>(null);
@@ -323,6 +324,77 @@ const LogiTrackVasche = () => {
     }
     return x / currentGridConfig.pixelsPerMeter;
   }, [currentCategory, currentGridConfig.pixelsPerMeter, getFilaLength, isScaledVascaLayout]);
+  const isSolettaOnTopOfPile = useCallback((articolo: Articolo) => {
+    if (articolo.tipo !== 'SOLETTA' || articolo.stato !== 'IN_AREA') return false;
+    if (!articolo.fila || articolo.offsetInizio === null) return false;
+    return !articoli.some(v =>
+      v.tipo === 'SOLETTA' &&
+      v.stato === 'IN_AREA' &&
+      v.id !== articolo.id &&
+      v.fila === articolo.fila &&
+      v.offsetInizio !== null &&
+      Math.abs(v.offsetInizio - articolo.offsetInizio!) < 0.1 &&
+      v.livello > articolo.livello
+    );
+  }, [articoli]);
+  const canMoveArticolo = useCallback((articolo: Articolo | null) => {
+    if (!articolo || articolo.stato !== 'IN_AREA') return false;
+    if (articolo.tipo !== 'SOLETTA') return true;
+    return isSolettaOnTopOfPile(articolo);
+  }, [isSolettaOnTopOfPile]);
+  const canShipArticolo = useCallback((articolo: Articolo | null) => {
+    if (!articolo || articolo.stato !== 'IN_AREA') return false;
+    if (articolo.tipo !== 'SOLETTA') return true;
+    return isSolettaOnTopOfPile(articolo);
+  }, [isSolettaOnTopOfPile]);
+  const canSelectArticolo = useCallback((articolo: Articolo | null) => {
+    if (!articolo) return false;
+    if (articolo.tipo !== 'SOLETTA') return true;
+    if (articolo.stato !== 'IN_AREA') return true;
+    return isSolettaOnTopOfPile(articolo);
+  }, [isSolettaOnTopOfPile]);
+  const selectArticoloDisabledReason = useCallback((articolo: Articolo | null) => {
+    if (!articolo) return '';
+    if (articolo.tipo === 'SOLETTA' && articolo.stato === 'IN_AREA' && !isSolettaOnTopOfPile(articolo)) {
+      return 'Solo le solette in cima alla pila possono essere selezionate.';
+    }
+    return '';
+  }, [isSolettaOnTopOfPile]);
+  const moveDisabledReason = useMemo(() => {
+    if (!selectedArticolo || selectedArticolo.stato !== 'IN_AREA') return '';
+    if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
+      return 'Solo le solette in cima alla pila possono essere spostate.';
+    }
+    return '';
+  }, [isSolettaOnTopOfPile, selectedArticolo]);
+  const shipDisabledReason = useMemo(() => {
+    if (!selectedArticolo || selectedArticolo.stato !== 'IN_AREA') return '';
+    if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
+      return 'Solo le solette in cima alla pila possono essere scaricate.';
+    }
+    return '';
+  }, [isSolettaOnTopOfPile, selectedArticolo]);
+  const selectArticolo = useCallback((articolo: Articolo) => {
+    if (!canSelectArticolo(articolo)) {
+      setShowInfoModal({
+        title: 'Selezione non consentita',
+        message: 'Solo le solette in cima alla pila possono essere selezionate.'
+      });
+      return;
+    }
+    setSelectedArticolo(articolo);
+  }, [canSelectArticolo]);
+  const activateMoveMode = useCallback((articolo: Articolo | null) => {
+    if (!articolo || articolo.stato !== 'IN_AREA') return;
+    if (!canMoveArticolo(articolo)) {
+      setShowInfoModal({
+        title: 'Spostamento non consentito',
+        message: 'Solo le solette in cima alla pila possono essere spostate.'
+      });
+      return;
+    }
+    setMode('move');
+  }, [canMoveArticolo]);
 
   // --- Persistence (API) ---
   useEffect(() => {
@@ -385,7 +457,7 @@ const LogiTrackVasche = () => {
       }
       if (e.key.toLowerCase() === 'm' && selectedArticolo.stato === 'IN_AREA') {
         e.preventDefault();
-        setMode('move');
+        activateMoveMode(selectedArticolo);
       }
       if (e.key.toLowerCase() === 's' && selectedArticolo.stato === 'IN_AREA') {
         e.preventDefault();
@@ -401,7 +473,15 @@ const LogiTrackVasche = () => {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedArticolo]);
+  }, [activateMoveMode, selectedArticolo]);
+  useEffect(() => {
+    if (!selectedArticolo) return;
+    if (!canSelectArticolo(selectedArticolo)) {
+      setSelectedArticolo(null);
+      setMode('view');
+      setGhostPosition(null);
+    }
+  }, [canSelectArticolo, selectedArticolo]);
 
   const fetchUtenti = async () => {
     try {
@@ -587,12 +667,12 @@ const LogiTrackVasche = () => {
         (filterType === 'creata' && v.stato === 'CREATA');
       const actionable =
         mode === 'position' ? v.stato === 'CREATA'
-          : mode === 'move' ? v.stato === 'IN_AREA'
+          : mode === 'move' ? (v.stato === 'IN_AREA' && canMoveArticolo(v))
             : true;
       const matchActionable = onlyActionable ? actionable : true;
       return matchCliente && matchCommessa && matchType && matchActionable;
     });
-  }, [activeArticoli, searchCliente, searchCommessa, filterType, mode, onlyActionable]);
+  }, [activeArticoli, searchCliente, searchCommessa, filterType, mode, onlyActionable, canMoveArticolo]);
 
   const clienteSuggestions = useMemo(() => {
     if (!searchCliente) return [];
@@ -976,6 +1056,13 @@ const LogiTrackVasche = () => {
 
   const handleMoveArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'move') return;
+    if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
+      setShowInfoModal({
+        title: 'Spostamento non consentito',
+        message: 'Solo le solette in cima alla pila possono essere spostate.'
+      });
+      return;
+    }
     if (selectedArticolo.tipo === 'SOLETTA') {
       if (fila === selectedArticolo.fila) {
         alert('Seleziona una pila diversa da quella attuale.');
@@ -984,11 +1071,6 @@ const LogiTrackVasche = () => {
       const destinationCheck = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
       if (!destinationCheck.available) {
         alert(`Destinazione non disponibile: ${destinationCheck.reason}`);
-        return;
-      }
-      const blockers = getSolettaBlockers(selectedArticolo);
-      if (blockers.length > 0) {
-        startSolettaRelocationFlow(selectedArticolo, 'move', fila);
         return;
       }
     }
@@ -1182,8 +1264,11 @@ const LogiTrackVasche = () => {
   };
 
   const handleScaricaArticolo = (v: Articolo) => {
-    if (v.tipo === 'SOLETTA' && v.stato === 'IN_AREA') {
-      startSolettaRelocationFlow(v, 'ship');
+    if (!canShipArticolo(v)) {
+      setShowInfoModal({
+        title: 'Scarico non consentito',
+        message: 'Solo le solette in cima alla pila possono essere scaricate.'
+      });
       return;
     }
     setShowConfirmModal({
@@ -1198,8 +1283,16 @@ const LogiTrackVasche = () => {
   const renderInventoryCard = (v: Articolo) => {
     const statusMeta = getStatusMeta(v.stato);
     const isSelected = selectedArticolo?.id === v.id;
+    const isSelectable = canSelectArticolo(v);
+    const selectionBlockReason = selectArticoloDisabledReason(v);
     return (
-      <div key={v.id} className={`vasca-card ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedArticolo(v)}>
+      <div
+        key={v.id}
+        className={`vasca-card ${isSelected ? 'selected' : ''}`}
+        onClick={() => selectArticolo(v)}
+        title={selectionBlockReason}
+        style={{ cursor: isSelectable ? 'pointer' : 'not-allowed', opacity: isSelectable ? 1 : 0.7 }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: v.colore }}></div>
@@ -1268,6 +1361,7 @@ const LogiTrackVasche = () => {
         
         .btn { padding: 10px 14px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
         .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-secondary { background: #e2e8f0; color: #475569; }
         .btn-success { background: #10b981; color: white; }
@@ -1702,7 +1796,7 @@ const LogiTrackVasche = () => {
                                         opacity: isFaded ? 0.35 : 1,
                                         zIndex: selectedArticolo?.id === v.id ? 20 : 10
                                       }}
-                                      onClick={(e: any) => { e.stopPropagation(); setSelectedArticolo(v); }}
+                                      onClick={(e: any) => { e.stopPropagation(); selectArticolo(v); }}
                                     >
                                       <div className="vasca-code" style={{ transform: 'rotate(-90deg)', whiteSpace: 'nowrap' }}>
                                         {v.codice}
@@ -1820,7 +1914,7 @@ const LogiTrackVasche = () => {
                                                   }}
                                                   onClick={(e: any) => {
                                                     e.stopPropagation();
-                                                    setSelectedArticolo(v);
+                                                    selectArticolo(v);
                                                   }}
                                                   onMouseEnter={() => setHoveredArticolo(v)}
                                                   onMouseLeave={() => setHoveredArticolo(null)}
@@ -1911,7 +2005,7 @@ const LogiTrackVasche = () => {
                                           }}
                                           onClick={(e: any) => {
                                             e.stopPropagation();
-                                            setSelectedArticolo(v);
+                                            selectArticolo(v);
                                           }}
                                           onMouseEnter={() => setHoveredArticolo(v)}
                                           onMouseLeave={() => setHoveredArticolo(null)}
@@ -1973,12 +2067,26 @@ const LogiTrackVasche = () => {
                           )}
                           {selectedArticolo.stato === 'IN_AREA' && (
                             <>
-                              <button className="btn btn-warning" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('move')}>
-                                <Move size={14} /> Sposta
-                              </button>
-                              <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleScaricaArticolo(selectedArticolo)}>
-                                <Trash2 size={14} /> Scarica
-                              </button>
+                              <span style={{ flex: 1, display: 'flex' }} title={moveDisabledReason}>
+                                <button
+                                  className="btn btn-warning"
+                                  style={{ flex: 1, justifyContent: 'center' }}
+                                  onClick={() => activateMoveMode(selectedArticolo)}
+                                  disabled={!canMoveArticolo(selectedArticolo)}
+                                >
+                                  <Move size={14} /> Sposta
+                                </button>
+                              </span>
+                              <span style={{ flex: 1, display: 'flex' }} title={shipDisabledReason}>
+                                <button
+                                  className="btn btn-danger"
+                                  style={{ flex: 1, justifyContent: 'center' }}
+                                  onClick={() => handleScaricaArticolo(selectedArticolo)}
+                                  disabled={!canShipArticolo(selectedArticolo)}
+                                >
+                                  <Trash2 size={14} /> Scarica
+                                </button>
+                              </span>
                             </>
                           )}
                         </div>
@@ -2510,6 +2618,20 @@ const LogiTrackVasche = () => {
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowConfirmModal(null)}><X size={16} /> No</button>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={showConfirmModal.onConfirm}><Check size={16} /> Si, procedi</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showInfoModal && (
+            <div className="modal-overlay">
+              <div className="modal" style={{ maxWidth: '460px' }}>
+                <h2 style={{ fontSize: '20px' }}>{showInfoModal.title || 'Avviso'}</h2>
+                <p style={{ margin: '16px 0 28px', color: '#475569', lineHeight: 1.5 }}>{showInfoModal.message}</p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-primary" onClick={() => setShowInfoModal(null)}>
+                    <Check size={16} /> Ho capito
+                  </button>
                 </div>
               </div>
             </div>
