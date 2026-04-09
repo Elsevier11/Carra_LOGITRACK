@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { hashPassword, isPasswordHash } = require('./auth');
 
 const dbPath = path.resolve(__dirname, 'vasche.db');
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -24,8 +25,8 @@ function initializeSchema() {
         // Inizializza utenti di default se la tabella è vuota
         db.get("SELECT count(*) as count FROM utenti", (err, row) => {
             if (row && row.count === 0) {
-                db.run("INSERT INTO utenti (id, username, password, ruolo) VALUES (?, ?, ?, ?)", ['1', 'admin', 'admin123', 'ADMIN']);
-                db.run("INSERT INTO utenti (id, username, password, ruolo) VALUES (?, ?, ?, ?)", ['2', 'operatore1', 'op123', 'OPERATORE']);
+                db.run("INSERT INTO utenti (id, username, password, ruolo) VALUES (?, ?, ?, ?)", ['1', 'admin', hashPassword('admin123'), 'ADMIN']);
+                db.run("INSERT INTO utenti (id, username, password, ruolo) VALUES (?, ?, ?, ?)", ['2', 'operatore1', hashPassword('op123'), 'OPERATORE']);
                 console.log('Utenti di default creati.');
             }
         });
@@ -63,6 +64,7 @@ function initializeSchema() {
 
         ensureColumnExists('registro', 'utente_nome', 'TEXT');
         normalizeLegacyArticoli();
+        migrateLegacyPasswords();
 
         console.log('Schema del database inizializzato.');
     });
@@ -116,6 +118,29 @@ function normalizeLegacyArticoli() {
             }
         }
     );
+}
+
+function migrateLegacyPasswords() {
+    db.all('SELECT id, username, password FROM utenti', (err, rows) => {
+        if (err) {
+            console.error('Errore migrazione password utenti:', err.message);
+            return;
+        }
+
+        (rows || []).forEach((user) => {
+            if (!user.password || isPasswordHash(user.password)) return;
+
+            db.run(
+                'UPDATE utenti SET password = ? WHERE id = ?',
+                [hashPassword(user.password), user.id],
+                (updateErr) => {
+                    if (updateErr) {
+                        console.error(`Errore hashing password utente ${user.username}:`, updateErr.message);
+                    }
+                }
+            );
+        });
+    });
 }
 
 module.exports = db;
