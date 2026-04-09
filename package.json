@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "start:prod": "npm.cmd run build && node server/index.js"
+    "start:prod": "npm.cmd run build && node server/index.js",
+    "test:backend": "node server/run-backend-tests.js",
+    "test:smoke": "node server/verify-flows.js",
+    "test:all": "npm.cmd run test:backend && npm.cmd run test:smoke"
   },
   "keywords": [],
   "author": "",

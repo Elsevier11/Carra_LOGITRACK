@@ -224,15 +224,39 @@ const LogiTrackVasche = () => {
     return null;
   }, []);
 
-  useEffect(() => {
-    try {
-      const rawUser = window.localStorage.getItem('logitrack_current_user');
-      if (!rawUser) return;
-      setCurrentUser(JSON.parse(rawUser));
-    } catch (err) {
-      console.error('Errore nel ripristino sessione utente:', err);
-    }
+  const apiFetch = useCallback((input: RequestInfo | URL, init?: RequestInit) => {
+    return fetch(input, {
+      ...init,
+      credentials: 'include',
+      headers: {
+        ...(init?.headers || {})
+      }
+    });
   }, []);
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const res = await apiFetch('/api/me');
+        if (!res.ok) {
+          setCurrentUser(null);
+          return;
+        }
+
+        const data = await res.json();
+        if (data?.success && data?.user) {
+          setCurrentUser(data.user);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.error('Errore nel ripristino sessione dal backend:', err);
+        setCurrentUser(null);
+      }
+    };
+
+    restoreSession();
+  }, [apiFetch]);
 
   useEffect(() => {
     try {
@@ -305,8 +329,8 @@ const LogiTrackVasche = () => {
     const fetchData = async () => {
       try {
         const [resVasche, resRegistro] = await Promise.all([
-          fetch('/api/articoli'),
-          fetch('/api/registro')
+          apiFetch('/api/articoli'),
+          apiFetch('/api/registro')
         ]);
         const dataVasche = await resVasche.json();
         const dataRegistro = await resRegistro.json();
@@ -330,7 +354,7 @@ const LogiTrackVasche = () => {
 
         if (relevelUpdates.length > 0) {
           Promise.all(relevelUpdates.map(v =>
-            fetch(`/api/articoli/${v.id}`, {
+            apiFetch(`/api/articoli/${v.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ livello: v.livello, offsetInizio: v.offsetInizio, posizione: v.posizione })
@@ -346,7 +370,7 @@ const LogiTrackVasche = () => {
       fetchData();
       if (currentUser.ruolo === 'ADMIN') fetchUtenti();
     }
-  }, [currentUser, normalizeTipo, normalizeSolettaStacks]);
+  }, [apiFetch, currentUser, normalizeTipo, normalizeSolettaStacks]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -381,7 +405,7 @@ const LogiTrackVasche = () => {
 
   const fetchUtenti = async () => {
     try {
-      const res = await fetch('/api/utenti');
+      const res = await apiFetch('/api/utenti');
       const data = await res.json();
       setUtenti(data);
     } catch (err) {
@@ -395,7 +419,7 @@ const LogiTrackVasche = () => {
       return;
     }
     try {
-      const res = await fetch('/api/utenti', {
+      const res = await apiFetch('/api/utenti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userFormData)
@@ -413,7 +437,7 @@ const LogiTrackVasche = () => {
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Eliminare definitivamente questo utente?')) return;
     try {
-      const res = await fetch(`/api/utenti/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/utenti/${id}`, { method: 'DELETE' });
       if (res.ok) fetchUtenti();
     } catch (err) {
       console.error('Errore eliminazione utente:', err);
@@ -424,7 +448,7 @@ const LogiTrackVasche = () => {
     e.preventDefault();
     setLoginError('');
     try {
-      const res = await fetch('/api/login', {
+      const res = await apiFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)
@@ -478,7 +502,7 @@ const LogiTrackVasche = () => {
     };
 
     try {
-      const res = await fetch('/api/registro', {
+      const res = await apiFetch('/api/registro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newLog)
@@ -751,7 +775,7 @@ const LogiTrackVasche = () => {
         dataCreazione: new Date().toISOString()
       };
 
-      const res = await fetch('/api/articoli', {
+      const res = await apiFetch('/api/articoli', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -832,7 +856,7 @@ const LogiTrackVasche = () => {
         setTimeout(async () => {
           for (const up of updates) {
             try {
-              await fetch(`/api/articoli/${up.id}`, {
+              await apiFetch(`/api/articoli/${up.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ livello: up.livello, posizione: up.posizione })
@@ -865,7 +889,7 @@ const LogiTrackVasche = () => {
     if (!vasca) return false;
 
     try {
-      const res = await fetch(`/api/articoli/${vascaId}`, {
+      const res = await apiFetch(`/api/articoli/${vascaId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1131,7 +1155,7 @@ const LogiTrackVasche = () => {
     }
 
     try {
-      const res = await fetch(`/api/articoli/${vasca.id}`, {
+      const res = await apiFetch(`/api/articoli/${vasca.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ posizione: null, stato: 'SPEDITA', livello: 0, fila: null, offsetInizio: null })
@@ -1521,7 +1545,12 @@ const LogiTrackVasche = () => {
                       )}
                       <button
                         className="user-menu-item"
-                        onClick={() => {
+                        onClick={async () => {
+                          try {
+                            await apiFetch('/api/logout', { method: 'POST' });
+                          } catch (err) {
+                            console.error('Errore logout backend:', err);
+                          }
                           setCurrentUser(null);
                           setLoginForm({ username: '', password: '' });
                           setLoginError('');
