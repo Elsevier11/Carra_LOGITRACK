@@ -37,11 +37,29 @@ const allowedOrigins = new Set([
     ...defaultAllowedOrigins,
     ...configuredAllowedOrigins
 ]);
+const allowAllCorsOrigins = (process.env.LOGITRACK_CORS_ALLOW_ALL || '').toLowerCase() === 'true';
+
+function isAllowedOrigin(origin) {
+    if (!origin) return true;
+    if (allowAllCorsOrigins) return true;
+    if (allowedOrigins.has(origin)) return true;
+
+    try {
+        const parsed = new URL(origin);
+        if (parsed.hostname.endsWith('.onrender.com')) {
+            return true;
+        }
+    } catch (_err) {
+        return false;
+    }
+
+    return false;
+}
 
 app.disable('x-powered-by');
 app.use('/api', cors({
     origin(origin, callback) {
-        if (!origin || allowedOrigins.has(origin)) {
+        if (isAllowedOrigin(origin)) {
             callback(null, true);
             return;
         }

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: carra-logitrack
+    env: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build && npm --prefix server install --omit=dev
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOGITRACK_COOKIE_SAMESITE
+        value: lax
+      - key: LOGITRACK_COOKIE_SECURE
+        value: "true"
+      - key: LOGITRACK_SESSION_SECRET
+        sync: false
