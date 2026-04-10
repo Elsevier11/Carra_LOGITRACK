@@ -2,25 +2,38 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import LogiTrackVasche from './logitrack_vasche_v2'
 
-// Marker: usato dal fallback in index.html per capire se il bundle è partito.
+// Marker: usato dal fallback in index.html per capire se il bundle e partito.
 window.__LOGITRACK_BOOTSTRAPPED__ = true
 try {
-    document.getElementById('boot-fallback')?.remove()
+    const bootFallback = document.getElementById('boot-fallback')
+    if (bootFallback?.parentNode) {
+        bootFallback.parentNode.removeChild(bootFallback)
+    }
 } catch {
     // ignore
 }
 
-function showFatalError(error) {
-    const root = document.getElementById('root')
-    const message = error instanceof Error ? (error.stack || error.message) : String(error)
+const FATAL_OVERLAY_ID = 'logitrack-fatal-overlay'
 
-    if (!root) {
-        document.body.innerText = `Fatal error: ${message}`
-        return
+function formatError(error) {
+    return error instanceof Error ? (error.stack || error.message) : String(error)
+}
+
+function showFatalError(error) {
+    const message = formatError(error)
+    const body = document.body
+    if (!body) return
+
+    let overlay = document.getElementById(FATAL_OVERLAY_ID)
+    if (!overlay) {
+        overlay = document.createElement('div')
+        overlay.id = FATAL_OVERLAY_ID
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#ffffff;padding:16px;overflow:auto;'
+        body.appendChild(overlay)
     }
 
-    root.innerHTML = `
-      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; padding: 16px; color: #0f172a;">
+    overlay.innerHTML = `
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; color: #0f172a;">
         <h1 style="font-size: 16px; margin: 0 0 12px;">LogiTrack - Errore di avvio</h1>
         <pre style="white-space: pre-wrap; margin: 0; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">${message}</pre>
       </div>
@@ -51,8 +64,13 @@ class ErrorBoundary extends React.Component {
 
     render() {
         if (this.state.hasError) {
-            showFatalError(this.state.error)
-            return null
+            const message = formatError(this.state.error)
+            return (
+                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace", padding: 16, color: '#0f172a' }}>
+                    <h1 style={{ fontSize: 16, margin: '0 0 12px' }}>LogiTrack - Errore di avvio</h1>
+                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>{message}</pre>
+                </div>
+            )
         }
         return this.props.children
     }
