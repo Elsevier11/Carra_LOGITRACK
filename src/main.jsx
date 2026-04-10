@@ -6,8 +6,8 @@ import LogiTrackVasche from './logitrack_vasche_v2'
 window.__LOGITRACK_BOOTSTRAPPED__ = true
 try {
     const bootFallback = document.getElementById('boot-fallback')
-    if (bootFallback?.parentNode) {
-        bootFallback.parentNode.removeChild(bootFallback)
+    if (bootFallback) {
+        bootFallback.style.display = 'none'
     }
 } catch {
     // ignore
