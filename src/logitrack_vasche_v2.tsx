@@ -113,6 +113,7 @@ const CATEGORY_LABELS = {
   VASCA: { tab: 'Vasche', singular: 'vasca', plural: 'Vasche' },
   SOLETTA: { tab: 'Solette', singular: 'soletta', plural: 'Solette' },
 } as const;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 
 /**
  * UI SUB-COMPONENTS
@@ -255,7 +256,12 @@ const LogiTrackVasche = () => {
   }, []);
 
   const apiFetch = useCallback((input: RequestInfo | URL, init?: RequestInit) => {
-    return fetch(input, {
+    const normalizedInput =
+      API_BASE_URL && typeof input === 'string' && input.startsWith('/')
+        ? `${API_BASE_URL}${input}`
+        : input;
+
+    return fetch(normalizedInput, {
       ...init,
       credentials: 'include',
       headers: {

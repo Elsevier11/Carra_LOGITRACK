@@ -17,17 +17,25 @@ const {
 } = require('./auth');
 
 const app = express();
-const port = 3001;
+const port = Number(process.env.PORT || 3001);
 const distPath = path.resolve(__dirname, '..', 'dist');
 const SUPPORTED_ARTICLE_TYPES = new Set(['VASCA', 'SOLETTA']);
 const SUPPORTED_ARTICLE_STATES = new Set(['CREATA', 'IN_AREA', 'SPEDITA']);
 const SUPPORTED_USER_ROLES = new Set(['ADMIN', 'OPERATORE']);
-const allowedOrigins = new Set([
+const defaultAllowedOrigins = [
     'http://127.0.0.1:3001',
     'http://localhost:3001',
     'http://127.0.0.1:5173',
     'http://localhost:5173',
     'http://192.168.1.88:3001',
+];
+const configuredAllowedOrigins = (process.env.LOGITRACK_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+const allowedOrigins = new Set([
+    ...defaultAllowedOrigins,
+    ...configuredAllowedOrigins
 ]);
 
 app.disable('x-powered-by');

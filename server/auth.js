@@ -3,6 +3,20 @@ const crypto = require('crypto');
 const SESSION_COOKIE_NAME = 'logitrack_session';
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 8;
 const SESSION_SECRET = process.env.LOGITRACK_SESSION_SECRET || 'logitrack-dev-secret-change-me';
+const COOKIE_SAMESITE = (process.env.LOGITRACK_COOKIE_SAMESITE || 'lax').toLowerCase();
+const COOKIE_SECURE_OVERRIDE = (process.env.LOGITRACK_COOKIE_SECURE || '').toLowerCase();
+
+function getSameSiteValue() {
+    if (COOKIE_SAMESITE === 'none') return 'None';
+    if (COOKIE_SAMESITE === 'strict') return 'Strict';
+    return 'Lax';
+}
+
+function shouldUseSecureCookie() {
+    if (COOKIE_SECURE_OVERRIDE === 'true') return true;
+    if (COOKIE_SECURE_OVERRIDE === 'false') return false;
+    return process.env.NODE_ENV === 'production' || getSameSiteValue() === 'None';
+}
 
 function toBase64Url(value) {
     return Buffer.from(value).toString('base64url');
@@ -82,15 +96,16 @@ function parseCookies(headerValue) {
 }
 
 function serializeSessionCookie(token) {
+    const sameSite = getSameSiteValue();
     const parts = [
         `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
         'Path=/',
         'HttpOnly',
-        'SameSite=Lax',
+        `SameSite=${sameSite}`,
         `Max-Age=${Math.floor(SESSION_DURATION_MS / 1000)}`
     ];
 
-    if (process.env.NODE_ENV === 'production') {
+    if (shouldUseSecureCookie()) {
         parts.push('Secure');
     }
 
@@ -98,15 +113,16 @@ function serializeSessionCookie(token) {
 }
 
 function serializeClearedSessionCookie() {
+    const sameSite = getSameSiteValue();
     const parts = [
         `${SESSION_COOKIE_NAME}=`,
         'Path=/',
         'HttpOnly',
-        'SameSite=Lax',
+        `SameSite=${sameSite}`,
         'Max-Age=0'
     ];
 
-    if (process.env.NODE_ENV === 'production') {
+    if (shouldUseSecureCookie()) {
         parts.push('Secure');
     }
 
