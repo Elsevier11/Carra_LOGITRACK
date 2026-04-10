@@ -1,5 +1,23 @@
-﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Search, Plus, Trash2, Move, Package, AlertCircle, Check, X, Calendar, Clock, User, Hash, ChevronUp, ChevronDown, Waves, Layers3 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Plus, Trash2, Move, Package, AlertCircle, Check, X, User, ChevronUp, ChevronDown, Waves, Layers3 } from 'lucide-react';
+import LogsSection from './components/logitrack/LogsSection';
+import UsersSection from './components/logitrack/UsersSection';
+import TabletActionBar from './components/logitrack/TabletActionBar';
+import SelectionCard from './components/logitrack/SelectionCard';
+import InventorySidebarPanel from './components/logitrack/InventorySidebarPanel';
+import { DetailTooltip, ArticoloBlock, SolettaBlock } from './components/logitrack/GridBlocks';
+import { apiFetch } from './components/logitrack/api';
+import {
+  SOLETTA_PILES,
+  SOLETTA_MAX_LEVELS,
+  SOLETTA_LEVEL_HEIGHT_PX,
+  SOLETTA_DEFAULT_LENGTH,
+  GRID_CONFIGS,
+  TANK_COLORS,
+  CATEGORY_LABELS,
+  NETWORK_ERROR_MESSAGE
+} from './components/logitrack/constants';
+import type { Articolo, AppUser, LogEntry, SolettaRelocationFlow } from './components/logitrack/types';
 
 const uuidv4 = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -10,147 +28,6 @@ const uuidv4 = () => {
     return v.toString(16);
   });
 };
-
-/**
- * TYPES & INTERFACES
- */
-interface Articolo {
-  id: string;
-  codice: string;
-  cliente: string;
-  commessa: string;
-  lunghezza: number;
-  altezzaVascaCm?: number | null;
-  lunghezzaSolettaCm?: number | null;
-  altezzaSolettaCm?: number | null;
-  posizione: string | null;
-  fila: string | null;
-  offsetInizio: number | null;
-  tipo: 'VASCA' | 'SOLETTA';
-  livello: number;
-  colore: string;
-  stato: 'CREATA' | 'IN_AREA' | 'SPEDITA';
-  dataCreazione: string;
-}
-
-interface AppUser {
-  id: string;
-  username: string;
-  password?: string;
-  ruolo: 'ADMIN' | 'OPERATORE';
-}
-
-interface LogEntry {
-  id: string;
-  tipo: 'CREAZIONE' | 'ENTRATA' | 'SPOSTAMENTO' | 'MOVIMENTAZIONE' | 'USCITA' | 'SPEDIZIONE';
-  vascaId?: string;
-  vascaCodice: string;
-  vascaColore: string;
-  dettagli: string;
-  utenteNome?: string;
-  timestamp: number;
-  recordedAt?: number;
-  eventAt?: number;
-}
-
-interface GridConfig {
-  rows: string[];
-  verticalRows?: string[];
-  totalLength: number;
-  rowLengths?: Record<string, number>;
-  pixelsPerMeter: number;
-}
-
-interface SolettaRelocationFlow {
-  target: Articolo;
-  blockers: Articolo[];
-  currentIndex: number;
-  finalAction: 'ship' | 'move';
-  destinationPile?: string;
-  history: Array<{ codice: string; fromPile: string; toPile: string; level: number }>;
-}
-
-/**
- * CONSTANTS
- */
-const SOLETTA_PILES = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
-const SOLETTA_MAX_LEVELS = 10;
-const SOLETTA_LEVEL_HEIGHT_PX = 20;
-const SOLETTA_DEFAULT_LENGTH = 200;
-
-const GRID_CONFIGS: Record<'VASCA' | 'SOLETTA', GridConfig> = {
-  VASCA: {
-    rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'L', 'M'],
-    totalLength: 6338,
-    rowLengths: {
-      A: 6338,
-      B: 6338,
-      C: 6338,
-      D: 6338,
-      E: 3722,
-      F: 3722,
-      G: 3722,
-      H: 3722,
-      I: 3722,
-      L: 4878,
-      M: 4878
-    },
-    pixelsPerMeter: 0.08
-  },
-  SOLETTA: {
-    rows: SOLETTA_PILES,
-    totalLength: 1000,
-    pixelsPerMeter: 1
-  }
-};
-
-const TANK_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#a855f7',
-];
-
-const CATEGORY_LABELS = {
-  VASCA: { tab: 'Vasche', singular: 'vasca', plural: 'Vasche' },
-  SOLETTA: { tab: 'Solette', singular: 'soletta', plural: 'Solette' },
-} as const;
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
-
-/**
- * UI SUB-COMPONENTS
- */
-
-const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: number } }) => (
-  <div className="tooltip" style={{ left: pos.x + 20, top: pos.y - 20 }}>
-    <div className="tooltip-header">
-      <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: vasca.colore }}></div>
-      <span style={{ fontWeight: 800, fontSize: '18px' }}>{vasca.codice}</span>
-    </div>
-    <div className="tooltip-row">
-      <span className="tooltip-label">Cliente:</span>
-      <span className="tooltip-value">{vasca.cliente}</span>
-    </div>
-    <div className="tooltip-row">
-      <span className="tooltip-label">Commessa:</span>
-      <span className="tooltip-value">{vasca.commessa}</span>
-    </div>
-    {vasca.tipo !== 'SOLETTA' && (
-      <div className="tooltip-row">
-        <span className="tooltip-label">Lunghezza:</span>
-        <span className="tooltip-value">{vasca.lunghezza}cm</span>
-      </div>
-    )}
-    <div className="tooltip-row">
-      <span className="tooltip-label">Posizione:</span>
-      <span className="tooltip-value">{vasca.posizione || 'Non posizionato'}</span>
-    </div>
-    {vasca.tipo === 'SOLETTA' && (
-      <div className="tooltip-row">
-        <span className="tooltip-label">Livello:</span>
-        <span className="tooltip-value">{vasca.livello}</span>
-      </div>
-    )}
-  </div>
-);
 
 /**
  * MAIN COMPONENT
@@ -173,7 +50,6 @@ const LogiTrackVasche = () => {
   const [showCommessaSuggestions, setShowCommessaSuggestions] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'in_area' | 'creata'>('all');
   const [selectedArticolo, setSelectedArticolo] = useState<Articolo | null>(null);
-  const [articoloActionMenu, setArticoloActionMenu] = useState<{ articoloId: string; x: number; y: number } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingArticoloId, setEditingArticoloId] = useState<string | null>(null);
@@ -209,6 +85,9 @@ const LogiTrackVasche = () => {
   const [solettaRelocationFlow, setSolettaRelocationFlow] = useState<SolettaRelocationFlow | null>(null);
   const [onlyActionable, setOnlyActionable] = useState(false);
   const [recentlyMovedIds, setRecentlyMovedIds] = useState<string[]>([]);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [isSelectionExpanded, setIsSelectionExpanded] = useState(true);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const flowTargetId = solettaRelocationFlow?.target.id;
   const flowCurrentBlockerId = solettaRelocationFlow?.blockers[solettaRelocationFlow.currentIndex]?.id;
   const flowBlockerIds = new Set<string>();
@@ -243,31 +122,18 @@ const LogiTrackVasche = () => {
   const flowInstructionText = currentFlowStep
     ? `Sposta prima ${currentFlowStep.codice} (${currentFlowStep.fila ?? 'pila attuale'}, L${currentFlowStep.livello})`
     : 'Segui la sequenza per liberare la pila.';
-  const actionMenuArticolo = useMemo(
-    () => articoloActionMenu ? (articoli.find(v => v.id === articoloActionMenu.articoloId) || null) : null,
-    [articoloActionMenu, articoli]
-  );
+  const isTabletLayout = viewportWidth <= 1024;
+  const isMobileLayout = viewportWidth <= 768;
+  const solettaColumns = isMobileLayout ? 2 : isTabletLayout ? 3 : 6;
   const inventoryListRef = useRef<HTMLDivElement | null>(null);
   const visibleCategories = useMemo(() => (['VASCA', 'SOLETTA'] as const), []);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  }, []);
   const normalizeTipo = useCallback((tipo: string): Articolo['tipo'] | null => {
     if (tipo === 'COPERCHIO') return 'SOLETTA';
     if (tipo === 'VASCA' || tipo === 'SOLETTA') return tipo;
     return null;
-  }, []);
-
-  const apiFetch = useCallback((input: RequestInfo | URL, init?: RequestInit) => {
-    const normalizedInput =
-      API_BASE_URL && typeof input === 'string' && input.startsWith('/')
-        ? `${API_BASE_URL}${input}`
-        : input;
-
-    return fetch(normalizedInput, {
-      ...init,
-      credentials: 'include',
-      headers: {
-        ...(init?.headers || {})
-      }
-    });
   }, []);
 
   useEffect(() => {
@@ -293,6 +159,24 @@ const LogiTrackVasche = () => {
 
     restoreSession();
   }, [apiFetch]);
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (selectedArticolo) {
+      setIsSelectionExpanded(!isMobileLayout);
+    }
+  }, [isMobileLayout, selectedArticolo]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     try {
@@ -351,13 +235,17 @@ const LogiTrackVasche = () => {
     return 100;
   }, [maxGridLength]);
   const isScaledVascaLayout = currentCategory === 'VASCA' && !!currentGridConfig.rowLengths;
-  const computeOffsetFromPointer = useCallback((fila: string, x: number, rectWidth: number) => {
+  const computeOffsetFromPointer = useCallback((fila: string, x: number, rectWidth: number, snapToStep: boolean = false) => {
     if (currentCategory === 'SOLETTA') return 0;
+    const snap = (value: number) => {
+      if (!snapToStep) return value;
+      return Math.round(value / 10) * 10;
+    };
     if (isScaledVascaLayout) {
       const filaLength = getFilaLength(fila);
-      return Math.max(0, Math.round((x / rectWidth) * filaLength));
+      return Math.max(0, snap(Math.round((x / rectWidth) * filaLength)));
     }
-    return Math.max(0, Math.round(x / currentGridConfig.pixelsPerMeter));
+    return Math.max(0, snap(Math.round(x / currentGridConfig.pixelsPerMeter)));
   }, [currentCategory, currentGridConfig.pixelsPerMeter, getFilaLength, isScaledVascaLayout]);
   const isSolettaOnTopOfPile = useCallback((articolo: Articolo) => {
     if (articolo.tipo !== 'SOLETTA' || articolo.stato !== 'IN_AREA') return false;
@@ -409,6 +297,25 @@ const LogiTrackVasche = () => {
     }
     return '';
   }, [isSolettaOnTopOfPile, selectedArticolo]);
+  const canDeleteSelectedArticolo = useMemo(() => {
+    if (!selectedArticolo) return false;
+    if (selectedArticolo.stato !== 'CREATA') return false;
+    return !registro.some((log) => {
+      const sameArticolo = log.vascaId === selectedArticolo.id;
+      const normalizedType = String(log.tipo || '').trim().toUpperCase();
+      return sameArticolo && normalizedType !== 'CREAZIONE';
+    });
+  }, [registro, selectedArticolo]);
+  const deleteDisabledReason = useMemo(() => {
+    if (!selectedArticolo) return '';
+    if (selectedArticolo.stato !== 'CREATA') {
+      return 'Cancellazione consentita solo per articoli in stato CREATA.';
+    }
+    if (!canDeleteSelectedArticolo) {
+      return 'Articolo gia movimentato: cancellazione non consentita.';
+    }
+    return '';
+  }, [canDeleteSelectedArticolo, selectedArticolo]);
   const handleArticoloClick = useCallback((event: React.MouseEvent, articolo: Articolo) => {
     event.stopPropagation();
     if (mode !== 'view' && !canSelectArticolo(articolo)) {
@@ -419,18 +326,8 @@ const LogiTrackVasche = () => {
       return;
     }
     setSelectedArticolo(articolo);
-    if (mode === 'view') {
-      setArticoloActionMenu({
-        articoloId: articolo.id,
-        x: event.clientX,
-        y: event.clientY
-      });
-    } else {
-      setArticoloActionMenu(null);
-    }
   }, [canSelectArticolo, mode]);
   const startEditArticolo = useCallback((articolo: Articolo) => {
-    setArticoloActionMenu(null);
     setShowConfirmModal({
       message: `Vuoi modificare i dati di ${articolo.codice}?`,
       onConfirm: () => {
@@ -560,7 +457,7 @@ const LogiTrackVasche = () => {
 
   const handleCreateUser = async () => {
     if (!userFormData.username || !userFormData.password) {
-      alert('Inserire username e password');
+      showToast('Inserire username e password', 'error');
       return;
     }
     try {
@@ -572,21 +469,35 @@ const LogiTrackVasche = () => {
       if (res.ok) {
         fetchUtenti();
         setUserFormData({ username: '', password: '', ruolo: 'OPERATORE' });
-        alert('Utente creato con successo');
+        showToast('Utente creato con successo', 'success');
       }
     } catch (err) {
       console.error('Errore creazione utente:', err);
+      showToast('Errore durante la creazione utente', 'error');
     }
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Eliminare definitivamente questo utente?')) return;
-    try {
-      const res = await apiFetch(`/api/utenti/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchUtenti();
-    } catch (err) {
-      console.error('Errore eliminazione utente:', err);
-    }
+    const userToDelete = utenti.find(u => u.id === id);
+    if (!userToDelete) return;
+    setShowConfirmModal({
+      message: `Eliminare definitivamente l'utente ${userToDelete.username}?`,
+      onConfirm: async () => {
+        setShowConfirmModal(null);
+        try {
+          const res = await apiFetch(`/api/utenti/${id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            showToast('Eliminazione utente non riuscita', 'error');
+            return;
+          }
+          fetchUtenti();
+          showToast(`Utente ${userToDelete.username} eliminato`, 'success');
+        } catch (err) {
+          console.error('Errore eliminazione utente:', err);
+          showToast('Errore di rete durante eliminazione utente', 'error');
+        }
+      }
+    });
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -786,6 +697,24 @@ const LogiTrackVasche = () => {
     };
   }, [filteredVasche, prioritizeSelectedArticolo]);
 
+  // Ottimizzazione: calcolo preventivo degli ID che devono essere evidenziati
+  const highlightedIds = useMemo(() => {
+    const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
+    if (!isAnyFilterActive) return null;
+
+    const set = new Set<string>();
+    articoli.forEach(v => {
+      const matchCliente = searchCliente === '' || v.cliente.toLowerCase().includes(searchCliente.toLowerCase());
+      const matchCommessa = searchCommessa === '' || v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+      const isSelected = selectedArticolo?.id === v.id;
+      
+      if (matchCliente && matchCommessa && (!selectedArticolo || isSelected)) {
+        set.add(v.id);
+      }
+    });
+    return set;
+  }, [articoli, searchCliente, searchCommessa, selectedArticolo]);
+
   useEffect(() => {
     if (!selectedArticolo || !inventoryListRef.current) return;
     inventoryListRef.current.scrollTop = 0;
@@ -898,7 +827,7 @@ const LogiTrackVasche = () => {
     const { codice, cliente, commessa, lunghezza, altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm } = formData;
     const isSoletta = currentCategory === 'SOLETTA';
     if (!codice || !cliente || !commessa || (!isSoletta && !lunghezza)) {
-      alert('Tutti i campi obbligatori devono essere compilati');
+      showToast('Compila tutti i campi obbligatori', 'error');
       return;
     }
 
@@ -907,22 +836,22 @@ const LogiTrackVasche = () => {
       ? (Number(lunghezzaSolettaCm) || SOLETTA_DEFAULT_LENGTH)
       : Number(lunghezza);
     if (isNaN(numLunghezza) || numLunghezza <= 0 || !Number.isInteger(numLunghezza)) {
-      alert('La lunghezza deve essere espressa in centimetri interi maggiori di zero');
+      showToast('La lunghezza deve essere in cm interi > 0', 'error');
       return;
     }
     const numAltezzaVasca = altezzaVascaCm ? Number(altezzaVascaCm) : null;
     const numLunghezzaSoletta = lunghezzaSolettaCm ? Number(lunghezzaSolettaCm) : null;
     const numAltezzaSoletta = altezzaSolettaCm ? Number(altezzaSolettaCm) : null;
     if (numAltezzaVasca !== null && (!Number.isInteger(numAltezzaVasca) || numAltezzaVasca <= 0)) {
-      alert('Altezza vasca non valida');
+      showToast('Altezza vasca non valida', 'error');
       return;
     }
     if (isSoletta && numLunghezzaSoletta !== null && (!Number.isInteger(numLunghezzaSoletta) || numLunghezzaSoletta <= 0)) {
-      alert('Lunghezza soletta non valida');
+      showToast('Lunghezza soletta non valida', 'error');
       return;
     }
     if (numAltezzaSoletta !== null && (!Number.isInteger(numAltezzaSoletta) || numAltezzaSoletta <= 0)) {
-      alert('Altezza soletta non valida');
+      showToast('Altezza soletta non valida', 'error');
       return;
     }
 
@@ -976,6 +905,7 @@ const LogiTrackVasche = () => {
         setMode('position');
         setGhostPosition(null);
         setActiveTab('grid');
+        showToast(`${newArticolo.codice} creato: seleziona la posizione`, 'success');
       } else {
         let errorMessage = 'Errore nella creazione.';
         try {
@@ -985,11 +915,11 @@ const LogiTrackVasche = () => {
         } catch (e) {
           console.error('Risposta non JSON dal server');
         }
-        alert(errorMessage);
+        showToast(errorMessage, 'error');
       }
     } catch (err) {
       console.error('Errore nella creazione articolo:', err);
-      alert('Errore di rete o del server. Verifica che il backend sia attivo.');
+      showToast(NETWORK_ERROR_MESSAGE, 'error');
     }
   };
 
@@ -1003,25 +933,25 @@ const LogiTrackVasche = () => {
     const altezzaSolettaCm = editFormData.altezzaSolettaCm ? Number(editFormData.altezzaSolettaCm) : null;
 
     if (!codice || !cliente || !commessa) {
-      alert('Codice, cliente e commessa sono obbligatori.');
+      showToast('Codice, cliente e commessa sono obbligatori', 'error');
       return;
     }
     if (altezzaVascaCm !== null && (!Number.isInteger(altezzaVascaCm) || altezzaVascaCm <= 0)) {
-      alert('Altezza vasca non valida.');
+      showToast('Altezza vasca non valida', 'error');
       return;
     }
     if (lunghezzaSolettaCm !== null && (!Number.isInteger(lunghezzaSolettaCm) || lunghezzaSolettaCm <= 0)) {
-      alert('Lunghezza soletta non valida.');
+      showToast('Lunghezza soletta non valida', 'error');
       return;
     }
     if (altezzaSolettaCm !== null && (!Number.isInteger(altezzaSolettaCm) || altezzaSolettaCm <= 0)) {
-      alert('Altezza soletta non valida.');
+      showToast('Altezza soletta non valida', 'error');
       return;
     }
 
     const currentArticolo = articoli.find(v => v.id === editingArticoloId);
     if (!currentArticolo) {
-      alert('Articolo non trovato.');
+      showToast('Articolo non trovato', 'error');
       return;
     }
 
@@ -1034,7 +964,7 @@ const LogiTrackVasche = () => {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        alert(errorData?.error || 'Errore nel salvataggio delle modifiche.');
+        showToast(errorData?.error || 'Errore nel salvataggio modifiche', 'error');
         return;
       }
 
@@ -1053,14 +983,14 @@ const LogiTrackVasche = () => {
       setShowEditModal(false);
       setEditingArticoloId(null);
       setEditFormData({ codice: '', cliente: '', commessa: '', altezzaVascaCm: '', lunghezzaSolettaCm: '', altezzaSolettaCm: '' });
+      showToast('Modifica salvata', 'success');
     } catch (err) {
       console.error('Errore nel salvataggio modifica articolo:', err);
-      alert('Errore di rete o del server.');
+      showToast(NETWORK_ERROR_MESSAGE, 'error');
     }
   };
 
   const handleDeleteArticolo = useCallback((articolo: Articolo) => {
-    setArticoloActionMenu(null);
     setShowConfirmModal({
       message: `Eliminare ${articolo.codice}? L'operazione è consentita solo se non è mai stato movimentato.`,
       onConfirm: async () => {
@@ -1069,18 +999,19 @@ const LogiTrackVasche = () => {
           const res = await apiFetch(`/api/articoli/${articolo.id}`, { method: 'DELETE' });
           if (!res.ok) {
             const errorData = await res.json().catch(() => null);
-            alert(errorData?.error || 'Eliminazione non consentita.');
+            showToast(errorData?.error || 'Eliminazione non consentita', 'error');
             return;
           }
           setArticoli(prev => prev.filter(v => v.id !== articolo.id));
           setSelectedArticolo(prev => (prev?.id === articolo.id ? null : prev));
+          showToast(`Articolo ${articolo.codice} eliminato`, 'success');
         } catch (err) {
           console.error('Errore cancellazione articolo:', err);
-          alert('Errore di rete o del server.');
+          showToast(NETWORK_ERROR_MESSAGE, 'error');
         }
       }
     });
-  }, [apiFetch]);
+  }, [apiFetch, showToast]);
 
   const applyGravity = async (fila: string, offset: number) => {
     // Ricalcola i livelli per gli articoli rimasti in una pila.
@@ -1204,12 +1135,12 @@ const LogiTrackVasche = () => {
         return true;
       } else {
         console.error('Failed to move articolo:', await res.text());
-        alert("Errore nello spostamento dell'articolo.");
+        showToast("Errore nello spostamento dell'articolo", 'error');
         return false;
       }
     } catch (err) {
       console.error("Errore nello spostamento dell'articolo:", err);
-      alert('Errore di rete o del server.');
+      showToast(NETWORK_ERROR_MESSAGE, 'error');
       return false;
     }
   };
@@ -1220,7 +1151,7 @@ const LogiTrackVasche = () => {
     // Per i pozzetti, l'offset passato Ã¨ giÃ  lo slot (1-10)
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, null, selectedArticolo.tipo);
     if (!check.available) {
-      alert(`Errore: ${check.reason}`);
+      showToast(`Posizione non valida: ${check.reason}`, 'error');
       return;
     }
     const nextLevel = (check as any).nextLevel || 1;
@@ -1248,18 +1179,18 @@ const LogiTrackVasche = () => {
     }
     if (selectedArticolo.tipo === 'SOLETTA') {
       if (fila === selectedArticolo.fila) {
-        alert('Seleziona una pila diversa da quella attuale.');
+        showToast('Seleziona una pila diversa da quella attuale', 'info');
         return;
       }
       const destinationCheck = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
       if (!destinationCheck.available) {
-        alert(`Destinazione non disponibile: ${destinationCheck.reason}`);
+        showToast(`Destinazione non disponibile: ${destinationCheck.reason}`, 'error');
         return;
       }
     }
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
     if (!check.available) {
-      alert(`Errore: ${check.reason}`);
+      showToast(`Posizione non valida: ${check.reason}`, 'error');
       return;
     }
     const nextLevel = (check as any).nextLevel || 1;
@@ -1323,13 +1254,13 @@ const LogiTrackVasche = () => {
     if (!current) return;
 
     if (current.fila === destinationPile) {
-      alert('Seleziona una pila diversa da quella corrente');
+      showToast('Seleziona una pila diversa da quella corrente', 'info');
       return;
     }
 
     const check = isPositionAvailable(destinationPile, 0, current.lunghezza, current.id, 'SOLETTA');
     if (!check.available) {
-      alert(`Errore: ${check.reason}`);
+      showToast(`Posizione non valida: ${check.reason}`, 'error');
       return;
     }
 
@@ -1373,7 +1304,7 @@ const LogiTrackVasche = () => {
         const targetNow = articoli.find(v => v.id === target.id) || target;
         const targetCheck = isPositionAvailable(destinationPile, 0, targetNow.lunghezza, targetNow.id, 'SOLETTA');
         if (!targetCheck.available) {
-          alert(`Errore: ${targetCheck.reason}`);
+          showToast(`Posizione non valida: ${targetCheck.reason}`, 'error');
           return;
         }
         const targetLevel = (targetCheck as any).nextLevel || 1;
@@ -1414,7 +1345,7 @@ const LogiTrackVasche = () => {
         v.livello > vasca.livello
       );
       if (itemAbove) {
-        alert(`Errore LIFO: impossibile scaricare. Sopra c'Ã¨ ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}.`);
+        showToast(`Errore LIFO: sopra c'e ${itemAbove.tipo.toLowerCase()} ${itemAbove.codice}`, 'error');
         return;
       }
     }
@@ -1438,11 +1369,11 @@ const LogiTrackVasche = () => {
         setSelectedArticolo(null);
       } else {
         console.error('Failed to ship articolo:', await res.text());
-        alert("Errore nello scarico dell'articolo.");
+        showToast("Errore nello scarico dell'articolo", 'error');
       }
     } catch (err) {
       console.error("Errore nello scarico dell'articolo:", err);
-      alert('Errore di rete o del server.');
+      showToast(NETWORK_ERROR_MESSAGE, 'error');
     }
   };
 
@@ -1463,45 +1394,48 @@ const LogiTrackVasche = () => {
     });
   };
 
-  const renderInventoryCard = (v: Articolo) => {
-    const statusMeta = getStatusMeta(v.stato);
-    const isSelected = selectedArticolo?.id === v.id;
-    const isSelectable = mode === 'view' || canSelectArticolo(v);
-    const selectionBlockReason = mode === 'view' ? '' : selectArticoloDisabledReason(v);
-    return (
-      <div
-        key={v.id}
-        className={`vasca-card ${isSelected ? 'selected' : ''}`}
-        onClick={(e) => handleArticoloClick(e, v)}
-        title={selectionBlockReason}
-        style={{ cursor: isSelectable ? 'pointer' : 'not-allowed', opacity: isSelectable ? 1 : 0.7 }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: v.colore }}></div>
-            <span className="vasca-codice">{v.codice}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {isSelected && <span className="selection-pill">Selezionato</span>}
-            <span className={statusMeta.className}>
-              {statusMeta.label}
-            </span>
-          </div>
-        </div>
-        <div className="vasca-info">
-          <div><strong>Cliente:</strong> {v.cliente}</div>
-          <div><strong>Commessa:</strong> {v.commessa}</div>
-                        {v.tipo !== 'SOLETTA' && (
-                          <div><strong>Lunghezza:</strong> {v.lunghezza}cm</div>
-                        )}
-          {v.tipo === 'VASCA' && v.altezzaVascaCm && <div><strong>Altezza:</strong> {v.altezzaVascaCm}cm</div>}
-          {v.tipo === 'SOLETTA' && v.lunghezzaSolettaCm && <div><strong>Lungh. soletta:</strong> {v.lunghezzaSolettaCm}cm</div>}
-          {v.tipo === 'SOLETTA' && v.altezzaSolettaCm && <div><strong>Alt. soletta:</strong> {v.altezzaSolettaCm}cm</div>}
-          {v.posizione && <div><strong>Posizione:</strong> {v.posizione}</div>}
-        </div>
-      </div>
-    );
-  };
+  const renderMovementActionButtons = (articolo: Articolo, compact: boolean = false) => (
+    <>
+      {articolo.stato === 'CREATA' && (
+        <button
+          className="btn btn-success"
+          style={{ flex: 1, justifyContent: 'center' }}
+          onClick={() => setMode('position')}
+        >
+          <Check size={14} /> Posiziona
+        </button>
+      )}
+      {articolo.stato === 'IN_AREA' && (
+        <>
+          <span style={{ flex: 1, display: 'flex' }} title={moveDisabledReason}>
+            <button
+              className="btn btn-warning"
+              style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => activateMoveMode(articolo)}
+              disabled={!canMoveArticolo(articolo)}
+            >
+              <Move size={14} /> Sposta
+            </button>
+          </span>
+          <span style={{ flex: 1, display: 'flex' }} title={shipDisabledReason}>
+            <button
+              className="btn btn-danger"
+              style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => handleScaricaArticolo(articolo)}
+              disabled={!canShipArticolo(articolo)}
+            >
+              <Trash2 size={14} /> Scarica
+            </button>
+          </span>
+        </>
+      )}
+      {compact && (
+        <button className="btn btn-secondary" onClick={() => setSelectedArticolo(null)}>
+          Chiudi
+        </button>
+      )}
+    </>
+  );
 
   // --- Render ---
   return (
@@ -1545,7 +1479,7 @@ const LogiTrackVasche = () => {
         .filter-tab { flex: 1; padding: 8px 10px; border: none; background: transparent; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: #64748b; transition: all 0.2s; }
         .filter-tab.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         
-        .btn { padding: 10px 14px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
+        .btn { min-height: 44px; padding: 12px 14px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
         .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .btn-primary { background: #3b82f6; color: white; }
@@ -1553,11 +1487,6 @@ const LogiTrackVasche = () => {
         .btn-success { background: #10b981; color: white; }
         .btn-warning { background: #f59e0b; color: white; }
         .btn-danger { background: #ef4444; color: white; }
-        .menu-overlay { position: fixed; inset: 0; z-index: 70; }
-        .articolo-action-menu { position: fixed; width: 220px; background: white; border: 1px solid #dbe3ef; border-radius: 12px; box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.45); padding: 8px; z-index: 80; }
-        .articolo-action-title { font-size: 12px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px; }
-        .articolo-action-button { width: 100%; border: none; background: #f8fafc; color: #1e293b; border-radius: 10px; padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 700; cursor: pointer; }
-        .articolo-action-button:hover { background: #eff6ff; color: #1d4ed8; }
         
         .nav-tabs { display: flex; gap: 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px; align-items: center; background: white; padding: 0 12px; border-radius: 14px 14px 0 0; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
         .nav-tab { padding: 8px 4px; font-weight: 700; font-size: 15px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -1598,6 +1527,7 @@ const LogiTrackVasche = () => {
           border: 2px solid #cbd5e1; 
           overflow: hidden;
           cursor: crosshair;
+          touch-action: manipulation;
         }
         .fila-track:hover { border-color: #3b82f6; }
         
@@ -1679,6 +1609,83 @@ const LogiTrackVasche = () => {
         .users-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
         .users-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
         .role-filter { padding: 8px 10px; border: 1px solid #dbe3ef; border-radius: 10px; background: #fff; color: #334155; font-size: 13px; }
+        .table-scroll { overflow-x: auto; width: 100%; }
+        .log-table { min-width: 980px; }
+        .users-table { min-width: 560px; }
+        .tablet-action-bar {
+          position: fixed;
+          left: 12px;
+          right: 12px;
+          bottom: 10px;
+          z-index: 120;
+          border-radius: 14px;
+          background: rgba(255,255,255,0.98);
+          border: 1px solid #dbe3ef;
+          box-shadow: 0 20px 40px -24px rgba(15,23,42,0.55);
+          padding: 10px;
+          display: grid;
+          gap: 10px;
+          backdrop-filter: blur(6px);
+        }
+        .tablet-action-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+        .tablet-action-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+        .tablet-action-buttons .btn { justify-content: center; min-height: 42px; font-size: 13px; padding: 10px; }
+        .app-toast {
+          position: fixed;
+          right: 16px;
+          bottom: 16px;
+          z-index: 130;
+          border-radius: 12px;
+          padding: 12px 14px;
+          font-size: 13px;
+          font-weight: 700;
+          color: white;
+          box-shadow: 0 14px 28px -18px rgba(0,0,0,0.6);
+        }
+        .app-toast.success { background: #16a34a; }
+        .app-toast.error { background: #dc2626; }
+        .app-toast.info { background: #2563eb; }
+        @media (max-width: 1366px) {
+          .content { grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; }
+          .grid-section, .sidebar { padding: 12px; }
+        }
+        @media (max-width: 1024px) {
+          .app { padding: 10px 12px 120px; }
+          .header { padding: 10px 12px; }
+          .header h1 { font-size: 21px; }
+          .content { grid-template-columns: 1fr; }
+          .content.grid-focus { min-height: auto; }
+          .sidebar { position: static; top: auto; }
+          .selection-card { position: static; top: auto; }
+          .users-layout { grid-template-columns: 1fr; }
+          .grid-content-layout { gap: 12px !important; }
+          .mode-badge { margin-left: 0; }
+          .search-box { flex-direction: column; }
+          .tooltip { display: none; }
+          .log-table { min-width: 820px; }
+          .log-table .col-optional-tablet { display: none; }
+          .users-table .col-optional-tablet { display: none; }
+        }
+        @media (max-width: 768px) {
+          .app { padding: 8px 8px 126px; }
+          .header-left { gap: 10px; }
+          .nav-tabs { gap: 8px; padding: 0 8px; overflow-x: auto; }
+          .nav-tab { font-size: 14px; white-space: nowrap; }
+          .ruler { font-size: 9px; padding: 0 36px 0 52px; }
+          .fila-row { grid-template-columns: 42px 1fr; gap: 6px; padding: 4px; }
+          .fila-label { font-size: 14px; }
+          .modal { width: 96%; padding: 18px; border-radius: 14px; }
+          .tablet-action-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .tablet-action-buttons .btn { font-size: 12px; }
+          .app-toast { left: 8px; right: 8px; bottom: 78px; }
+          .log-table { min-width: 700px; }
+          .users-table { min-width: 440px; }
+          .users-toolbar > span { width: 100%; margin-left: 0 !important; }
+          .vasca-card { padding: 8px 10px; margin-bottom: 6px; }
+          .vasca-info { font-size: 11px; gap: 2px; margin-top: 6px; }
+          .selection-card-code { font-size: 16px; }
+          .selection-card-grid { font-size: 12px; }
+        }
         @media (max-width: 1100px) {
           .header-top { align-items: flex-start; }
           .header-right { width: 100%; justify-content: flex-end; }
@@ -1887,6 +1894,11 @@ const LogiTrackVasche = () => {
                           <> ({selectedArticolo?.lunghezza}cm)</>
                         )}
                       </div>
+                    {isTabletLayout && selectedArticolo?.tipo !== 'SOLETTA' && (
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                        Suggerimento tablet: il posizionamento con tocco viene arrotondato a step da 10cm.
+                      </div>
+                    )}
                     <button
                       className="btn btn-secondary"
                       style={{ marginTop: '12px', padding: '8px 16px', fontSize: '13px' }}
@@ -1928,7 +1940,7 @@ const LogiTrackVasche = () => {
                     if (mode === 'view') return;
                     setMousePos({ x: e.clientX, y: e.clientY });
                   }}>
-                    <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: 'flex-start', padding: '8px' }}>
+                    <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: 'flex-start', padding: '8px', flexDirection: isTabletLayout ? 'column' : 'row' }}>
                       {/* --- SEZIONE VERTICALE (V1, V2 ecc.) --- */}
                       {currentGridConfig.verticalRows && currentGridConfig.verticalRows.length > 0 && (
                         <div className="vertical-tracks-section" style={{ display: 'flex', gap: '15px' }}>
@@ -1953,6 +1965,15 @@ const LogiTrackVasche = () => {
                                   if (mode === 'position') handlePositionArticolo(fila, offset);
                                   if (mode === 'move') handleMoveArticolo(fila, offset);
                                 }}
+                                onPointerDown={(e: any) => {
+                                  if (e.pointerType === 'mouse') return;
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const y = e.clientY - rect.bottom;
+                                  const rawOffset = Math.round(Math.abs(y) / currentGridConfig.pixelsPerMeter);
+                                  const offset = Math.round(rawOffset / 10) * 10;
+                                  if (mode === 'position') handlePositionArticolo(fila, offset);
+                                  if (mode === 'move') handleMoveArticolo(fila, offset);
+                                }}
                                 onMouseMove={(e: any) => {
                                   if (mode === 'view') return;
                                   const rect = e.currentTarget.getBoundingClientRect();
@@ -1960,31 +1981,28 @@ const LogiTrackVasche = () => {
                                   const offset = Math.round(Math.abs(y) / currentGridConfig.pixelsPerMeter);
                                   setGhostPosition(`${fila}:${offset}`);
                                 }}
+                                onPointerMove={(e: any) => {
+                                  if (mode === 'view' || e.pointerType === 'mouse') return;
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const y = e.clientY - rect.bottom;
+                                  const rawOffset = Math.round(Math.abs(y) / currentGridConfig.pixelsPerMeter);
+                                  const offset = Math.round(rawOffset / 10) * 10;
+                                  setGhostPosition(`${fila}:${offset}`);
+                                }}
                                 onMouseLeave={() => setGhostPosition(null)}
                               >
                                 {articoliPerFila[fila]?.map((v: Articolo) => {
-                                  const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
-                                  let isFaded = false;
-                                  if (isAnyFilterActive) {
-                                    const matchCliente = searchCliente === '' || v.cliente.toLowerCase().includes(searchCliente.toLowerCase());
-                                    const matchCommessa = searchCommessa === '' || v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                                    const isSelected = selectedArticolo?.id === v.id;
-                                    if (!matchCliente || !matchCommessa) isFaded = true;
-                                    if (selectedArticolo && !isSelected) isFaded = true;
-                                    if (isSelected) isFaded = false;
-                                  }
-
                                   return (
                                     <div
                                       key={v.id}
-                                      className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${getFlowClasses(v)}`}
+                                      className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${highlightedIds && !highlightedIds.has(v.id) ? 'faded' : ''} ${getFlowClasses(v)}`}
                                       style={{
                                         left: 2,
                                         bottom: (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
                                         width: '54px',
                                         height: v.lunghezza * currentGridConfig.pixelsPerMeter,
                                         backgroundColor: v.colore,
-                                        opacity: isFaded ? 0.35 : 1,
+                                        opacity: highlightedIds && !highlightedIds.has(v.id) ? 0.35 : 1,
                                         zIndex: selectedArticolo?.id === v.id ? 20 : 10
                                       }}
                                       onClick={(e: any) => handleArticoloClick(e, v)}
@@ -2019,8 +2037,8 @@ const LogiTrackVasche = () => {
                         {currentCategory === 'SOLETTA' ? (
                           (() => {
                             const rows: string[][] = [];
-                            for (let i = 0; i < SOLETTA_PILES.length; i += 6) {
-                              rows.push(SOLETTA_PILES.slice(i, i + 6));
+                            for (let i = 0; i < SOLETTA_PILES.length; i += solettaColumns) {
+                              rows.push(SOLETTA_PILES.slice(i, i + solettaColumns));
                             }
                             return (
                               <div style={{ display: 'grid', gap: '14px' }}>
@@ -2029,7 +2047,7 @@ const LogiTrackVasche = () => {
                                     key={`sol-row-${rowIndex}`}
                                     style={{
                                       display: 'grid',
-                                      gridTemplateColumns: 'repeat(6, minmax(140px, 1fr))',
+                                      gridTemplateColumns: `repeat(${solettaColumns}, minmax(${isMobileLayout ? 120 : 140}px, 1fr))`,
                                       gap: '12px',
                                       alignItems: 'end'
                                     }}
@@ -2040,7 +2058,7 @@ const LogiTrackVasche = () => {
                                       const pileLoadStyle = getPileLoadStyle(occupiedLevels);
                                       return (
                                         <div key={pile} className="pile-column">
-                                          <div className="pile-index">{rowIndex * 6 + index + 1}</div>
+                                          <div className="pile-index">{rowIndex * solettaColumns + index + 1}</div>
                                           <div
                                             className="fila-track"
                                             style={{
@@ -2053,8 +2071,17 @@ const LogiTrackVasche = () => {
                                               if (mode === 'position') handlePositionArticolo(pile, 0);
                                               if (mode === 'move') handleMoveArticolo(pile, 0);
                                             }}
+                                            onPointerDown={(e: any) => {
+                                              if (e.pointerType === 'mouse') return;
+                                              if (mode === 'position') handlePositionArticolo(pile, 0);
+                                              if (mode === 'move') handleMoveArticolo(pile, 0);
+                                            }}
                                             onMouseMove={() => {
                                               if (mode === 'view') return;
+                                              setGhostPosition(`${pile}:0`);
+                                            }}
+                                            onPointerMove={(e: any) => {
+                                              if (mode === 'view' || e.pointerType === 'mouse') return;
                                               setGhostPosition(`${pile}:0`);
                                             }}
                                             onMouseLeave={() => setGhostPosition(null)}
@@ -2073,43 +2100,19 @@ const LogiTrackVasche = () => {
                                             ))}
 
                                             {pileItems.map((v: Articolo) => {
-                                              const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
-                                              let isFaded = false;
-                                              if (isAnyFilterActive) {
-                                                const matchesSearch =
-                                                  v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
-                                                  v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                                                const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
-                                                if (!(matchesSearch && matchesSelection)) isFaded = true;
-                                              }
                                               return (
-                                                <div
+                                                <SolettaBlock
                                                   key={v.id}
-                                                  className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''} ${getFlowClasses(v)}`}
-                                                  style={{
-                                                    left: '3px',
-                                                    top: 'auto',
-                                                    width: 'calc(100% - 6px)',
-                                                    height: `${SOLETTA_LEVEL_HEIGHT_PX - 2}px`,
-                                                    bottom: `${(v.livello - 1) * SOLETTA_LEVEL_HEIGHT_PX + 1}px`,
-                                                    backgroundColor: v.colore,
-                                                    opacity: isFaded ? 0.35 : 1,
-                                                    zIndex: 10 + (v.livello || 1),
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontSize: '9px',
-                                                    fontWeight: 800,
-                                                    color: '#fff',
-                                                    padding: '0 14px 0 6px'
-                                                  }}
-                                                  onClick={(e: any) => handleArticoloClick(e, v)}
-                                                  onMouseEnter={() => setHoveredArticolo(v)}
+                                                  articolo={v}
+                                                  isSelected={selectedArticolo?.id === v.id}
+                                                  isFaded={highlightedIds && !highlightedIds.has(v.id)}
+                                                  isRecentlyMoved={recentlyMovedIds.includes(v.id)}
+                                                  flowClass={getFlowClasses(v)}
+                                                  levelHeight={SOLETTA_LEVEL_HEIGHT_PX}
+                                                  onClick={handleArticoloClick}
+                                                  onMouseEnter={setHoveredArticolo}
                                                   onMouseLeave={() => setHoveredArticolo(null)}
-                                                >
-                                                  <span style={{ width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.codice}>{v.codice}</span>
-                                                  <span style={{ position: 'absolute', right: '6px', top: '2px', fontSize: '9px', opacity: 0.9 }}>L{v.livello}</span>
-                                                </div>
+                                                />
                                               );
                                             })}
 
@@ -2159,6 +2162,14 @@ const LogiTrackVasche = () => {
                                       if (mode === 'position') handlePositionArticolo(fila, offset);
                                       if (mode === 'move') handleMoveArticolo(fila, offset);
                                     }}
+                                    onPointerDown={(e: any) => {
+                                      if (e.pointerType === 'mouse') return;
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const x = e.clientX - rect.left;
+                                      const offset = computeOffsetFromPointer(fila, x, rect.width, true);
+                                      if (mode === 'position') handlePositionArticolo(fila, offset);
+                                      if (mode === 'move') handleMoveArticolo(fila, offset);
+                                    }}
                                     onMouseMove={(e: any) => {
                                       if (mode === 'view') return;
                                       const rect = e.currentTarget.getBoundingClientRect();
@@ -2166,37 +2177,31 @@ const LogiTrackVasche = () => {
                                       const offset = computeOffsetFromPointer(fila, x, rect.width);
                                       setGhostPosition(`${fila}:${offset}`);
                                     }}
+                                    onPointerMove={(e: any) => {
+                                      if (mode === 'view' || e.pointerType === 'mouse') return;
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const x = e.clientX - rect.left;
+                                      const offset = computeOffsetFromPointer(fila, x, rect.width, true);
+                                      setGhostPosition(`${fila}:${offset}`);
+                                    }}
                                     onMouseLeave={() => setGhostPosition(null)}
                                   >
                                     {articoliPerFila[fila]?.map((v: Articolo) => {
-                                      const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
-                                      let isFaded = false;
-                                      if (isAnyFilterActive) {
-                                        const matchesSearch =
-                                          v.cliente.toLowerCase().includes(searchCliente.toLowerCase()) &&
-                                          v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
-                                        const matchesSelection = selectedArticolo ? v.id === selectedArticolo.id : true;
-                                        if (!(matchesSearch && matchesSelection)) isFaded = true;
-                                      }
-
                                       return (
-                                        <div
+                                        <ArticoloBlock
                                           key={v.id}
-                                          className={`vasca-block ${selectedArticolo?.id === v.id ? 'selected' : ''} ${isFaded ? 'faded' : ''} ${recentlyMovedIds.includes(v.id) ? 'gravity-drop' : ''} ${getFlowClasses(v)}`}
-                                          style={{
-                                            left: isScaledVascaLayout ? `${(((v.offsetInizio || 0) / filaLength) * 100)}%` : (v.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
-                                            width: isScaledVascaLayout ? `${((v.lunghezza / filaLength) * 100)}%` : v.lunghezza * currentGridConfig.pixelsPerMeter,
-                                            backgroundColor: v.colore,
-                                            opacity: isFaded ? 0.35 : 1,
-                                            transform: v.livello > 1 ? `translateY(-${(v.livello - 1) * 10}px)` : 'none',
-                                            zIndex: 10 + (v.livello || 1)
-                                          }}
-                                          onClick={(e: any) => handleArticoloClick(e, v)}
-                                          onMouseEnter={() => setHoveredArticolo(v)}
+                                          articolo={v}
+                                          isSelected={selectedArticolo?.id === v.id}
+                                          isFaded={highlightedIds ? !highlightedIds.has(v.id) : false}
+                                          isRecentlyMoved={recentlyMovedIds.includes(v.id)}
+                                          flowClass={getFlowClasses(v)}
+                                          currentGridConfig={currentGridConfig}
+                                          isScaledVascaLayout={isScaledVascaLayout}
+                                          filaLength={filaLength}
+                                          onClick={handleArticoloClick}
+                                          onMouseEnter={setHoveredArticolo}
                                           onMouseLeave={() => setHoveredArticolo(null)}
-                                        >
-                                          {v.codice} {v.livello > 1 && `(L${v.livello})`}
-                                        </div>
+                                        />
                                       );
                                     })}
 
@@ -2229,374 +2234,91 @@ const LogiTrackVasche = () => {
 
                 <div className="sidebar">
                   {selectedArticolo && (
-                    <div className="selection-card">
-                      <div className="selection-card-head">
-                        <div className="selection-card-title">Selezionato</div>
-                        <span className={getStatusMeta(selectedArticolo.stato).className}>{getStatusMeta(selectedArticolo.stato).label}</span>
-                      </div>
-                      <div className="selection-card-code">{selectedArticolo.codice}</div>
-                      <div className="selection-card-grid">
-                        <div><strong>Cliente:</strong> {selectedArticolo.cliente}</div>
-                        <div><strong>Commessa:</strong> {selectedArticolo.commessa}</div>
-                        {selectedArticolo.tipo !== 'SOLETTA' && (
-                          <div><strong>Lunghezza:</strong> {selectedArticolo.lunghezza}cm</div>
-                        )}
-                        {selectedArticolo.tipo === 'VASCA' && selectedArticolo.altezzaVascaCm && (
-                          <div><strong>Altezza:</strong> {selectedArticolo.altezzaVascaCm}cm</div>
-                        )}
-                        {selectedArticolo.tipo === 'SOLETTA' && selectedArticolo.lunghezzaSolettaCm && (
-                          <div><strong>Lungh. soletta:</strong> {selectedArticolo.lunghezzaSolettaCm}cm</div>
-                        )}
-                        {selectedArticolo.tipo === 'SOLETTA' && selectedArticolo.altezzaSolettaCm && (
-                          <div><strong>Alt. soletta:</strong> {selectedArticolo.altezzaSolettaCm}cm</div>
-                        )}
-                        {selectedArticolo.posizione && <div><strong>Posizione:</strong> {selectedArticolo.posizione}</div>}
-                      </div>
-                      <div className="form-group" style={{ marginBottom: '12px' }}>
-                        <label className="form-label">Data/ora movimento</label>
-                        <input
-                          type="datetime-local"
-                          className="form-input"
-                          value={movementDateTime}
-                          onChange={(e) => setMovementDateTime(e.target.value)}
-                        />
-                      </div>
-                      {mode === 'view' ? (
-                        <div className="selection-actions">
-                          {selectedArticolo.stato === 'CREATA' && (
-                            <button className="btn btn-success" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('position')}>
-                              <Check size={14} /> Posiziona
-                            </button>
-                          )}
-                          {selectedArticolo.stato === 'IN_AREA' && (
-                            <>
-                              <span style={{ flex: 1, display: 'flex' }} title={moveDisabledReason}>
-                                <button
-                                  className="btn btn-warning"
-                                  style={{ flex: 1, justifyContent: 'center' }}
-                                  onClick={() => activateMoveMode(selectedArticolo)}
-                                  disabled={!canMoveArticolo(selectedArticolo)}
-                                >
-                                  <Move size={14} /> Sposta
-                                </button>
-                              </span>
-                              <span style={{ flex: 1, display: 'flex' }} title={shipDisabledReason}>
-                                <button
-                                  className="btn btn-danger"
-                                  style={{ flex: 1, justifyContent: 'center' }}
-                                  onClick={() => handleScaricaArticolo(selectedArticolo)}
-                                  disabled={!canShipArticolo(selectedArticolo)}
-                                >
-                                  <Trash2 size={14} /> Scarica
-                                </button>
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="action-hint" style={{ marginBottom: 0 }}>
-                          Conferma una posizione sulla planimetria o premi <strong>Esc</strong> per annullare.
-                        </div>
-                      )}
-                    </div>
+                    <SelectionCard
+                      selectedArticolo={selectedArticolo}
+                      statusMeta={getStatusMeta(selectedArticolo.stato)}
+                      isTabletLayout={isTabletLayout}
+                      isSelectionExpanded={isSelectionExpanded}
+                      onToggleExpanded={() => setIsSelectionExpanded(v => !v)}
+                      movementDateTime={movementDateTime}
+                      setMovementDateTime={setMovementDateTime}
+                      mode={mode}
+                      movementActions={renderMovementActionButtons(selectedArticolo)}
+                      deleteDisabledReason={deleteDisabledReason}
+                      canDeleteSelectedArticolo={canDeleteSelectedArticolo}
+                      onEdit={() => startEditArticolo(selectedArticolo)}
+                      onDelete={() => handleDeleteArticolo(selectedArticolo)}
+                    />
                   )}
-                  <div className="sidebar-panel">
-                    <div className="sidebar-head">
-                      <div className="sidebar-title">{CATEGORY_LABELS[currentCategory].plural}</div>
-                      <div className="sidebar-count">{filteredVasche.length}</div>
-                    </div>
-                    <div className="sidebar-actions">
-                      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowCreateModal(true)}>
-                        <Plus size={18} /> Crea {CATEGORY_LABELS[currentCategory].singular}
-                      </button>
-                      <div className="sidebar-badges">
-                        <div className="sidebar-badge">{activeArticoli.length} attive</div>
-                        <div className="sidebar-badge in-area">{activeArticoli.filter(v => v.stato === 'IN_AREA').length} in piazzale</div>
-                        <div className="sidebar-badge created">{activeArticoli.filter(v => v.stato === 'CREATA').length} in attesa</div>
-                      </div>
-                      <div className="search-stack">
-                        <div className="search-container">
-                          <Search className="search-icon" size={18} />
-                          <input
-                            type="text"
-                            placeholder="Filtra per cliente..."
-                            className="search-input"
-                            value={searchCliente}
-                            onChange={(e) => setSearchCliente(e.target.value)}
-                            onFocus={() => setShowClienteSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
-                          />
-                          {showClienteSuggestions && clienteSuggestions.length > 0 && (
-                            <div className="suggestions-list">
-                              <div className="suggestion-header">Clienti trovati</div>
-                              {clienteSuggestions.map(s => (
-                                <div key={s} className="suggestion-item" onClick={() => setSearchCliente(s)}>
-                                  {s}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="search-container">
-                          <Search className="search-icon" size={18} />
-                          <input
-                            type="text"
-                            placeholder="Filtra per commessa..."
-                            className="search-input"
-                            value={searchCommessa}
-                            onChange={(e) => setSearchCommessa(e.target.value)}
-                            onFocus={() => setShowCommessaSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowCommessaSuggestions(false), 200)}
-                          />
-                          {showCommessaSuggestions && commessaSuggestions.length > 0 && (
-                            <div className="suggestions-list">
-                              <div className="suggestion-header">Commesse trovate</div>
-                              {commessaSuggestions.map(s => (
-                                <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
-                                  {s}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="filter-tabs">
-                        {(['all', 'in_area', 'creata'] as const).map((t) => (
-                          <button key={t} className={`filter-tab ${filterType === t ? 'active' : ''}`} onClick={() => setFilterType(t)}>
-                            {t === 'all' ? 'Attive' : t === 'in_area' ? 'In piazzale' : 'Da posizionare'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <label className="quick-toggle">
-                    <input type="checkbox" checked={onlyActionable} onChange={e => setOnlyActionable(e.target.checked)} />
-                    Mostra solo articoli utilizzabili in questa modalità
-                  </label>
-                  <div className="vasca-list" ref={inventoryListRef}>
-                    {groupedFilteredArticoli.inArea.length > 0 && (
-                      <>
-                        <div className="suggestion-header" style={{ marginBottom: '8px' }}>In piazzale</div>
-                        {groupedFilteredArticoli.inArea.map(renderInventoryCard)}
-                      </>
-                    )}
-                    {groupedFilteredArticoli.creata.length > 0 && (
-                      <>
-                        <div className="suggestion-header" style={{ marginBottom: '8px' }}>In Attesa</div>
-                        {groupedFilteredArticoli.creata.map(renderInventoryCard)}
-                      </>
-                    )}
-                  </div>
+                  <InventorySidebarPanel
+                    categoryLabelPlural={CATEGORY_LABELS[currentCategory].plural}
+                    categoryLabelSingular={CATEGORY_LABELS[currentCategory].singular}
+                    filteredCount={filteredVasche.length}
+                    activeCount={activeArticoli.length}
+                    inAreaCount={activeArticoli.filter(v => v.stato === 'IN_AREA').length}
+                    createdCount={activeArticoli.filter(v => v.stato === 'CREATA').length}
+                    onCreate={() => setShowCreateModal(true)}
+                    searchCliente={searchCliente}
+                    setSearchCliente={setSearchCliente}
+                    searchCommessa={searchCommessa}
+                    setSearchCommessa={setSearchCommessa}
+                    showClienteSuggestions={showClienteSuggestions}
+                    setShowClienteSuggestions={setShowClienteSuggestions}
+                    showCommessaSuggestions={showCommessaSuggestions}
+                    setShowCommessaSuggestions={setShowCommessaSuggestions}
+                    clienteSuggestions={clienteSuggestions}
+                    commessaSuggestions={commessaSuggestions}
+                    filterType={filterType}
+                    setFilterType={setFilterType}
+                    onlyActionable={onlyActionable}
+                    setOnlyActionable={setOnlyActionable}
+                    isMobileLayout={isMobileLayout}
+                    groupedFilteredArticoli={groupedFilteredArticoli}
+                    inventoryListRef={inventoryListRef}
+                    selectedArticoloId={selectedArticolo?.id}
+                    mode={mode}
+                    canSelectArticolo={canSelectArticolo}
+                    selectArticoloDisabledReason={selectArticoloDisabledReason}
+                    onSelect={handleArticoloClick}
+                    getStatusMeta={getStatusMeta}
+                  />
                 </div>
               </div>
             </>
           ) : activeTab === 'logs' ? (
-            <div className="grid-section" style={{ position: 'relative', zIndex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '18px' }}>Registro operazioni</h2>
-              </div>
-              <table className="log-table">
-                <thead>
-                  <tr>
-                    <th onClick={() => requestSort('timestamp')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Calendar size={14} /> Registrazione
-                        {sortConfig.key === 'timestamp' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('eventAt' as keyof LogEntry)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock size={14} /> Data movimento
-                        {sortConfig.key === 'eventAt' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('tipo')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        Operazione
-                        {sortConfig.key === 'tipo' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('vascaCodice')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Hash size={14} /> Articolo
-                        {sortConfig.key === 'vascaCodice' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('utenteNome')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <User size={14} /> Operatore
-                        {sortConfig.key === 'utenteNome' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('dettagli')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        Dettagli evento
-                        {sortConfig.key === 'dettagli' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedRegistro.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Nessuna attività registrata</td></tr>
-                  ) : (
-                    sortedRegistro.map((log: LogEntry) => (
-                      <tr key={log.id}>
-                        <td style={{ whiteSpace: 'nowrap', color: '#64748b' }}>
-                          {new Date(log.recordedAt || log.timestamp).toLocaleDateString()} <span style={{ opacity: 0.5 }}>-</span> {new Date(log.recordedAt || log.timestamp).toLocaleTimeString()}
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap', color: '#64748b' }}>
-                          {new Date(log.eventAt || log.recordedAt || log.timestamp).toLocaleDateString()} <span style={{ opacity: 0.5 }}>-</span> {new Date(log.eventAt || log.recordedAt || log.timestamp).toLocaleTimeString()}
-                        </td>
-                        <td><span className={`log-type ${log.tipo.toLowerCase()}`}>{log.tipo}</span></td>
-                        <td style={{ fontWeight: 700 }}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: log.vascaColore }}></div>{log.vascaCodice}</div></td>
-                        <td className="log-operator"><User size={12} /> {log.utenteNome || '---'}</td>
-                        <td style={{ color: '#475569' }}>{log.dettagli}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <LogsSection
+              sortedRegistro={sortedRegistro}
+              sortConfig={sortConfig}
+              requestSort={requestSort}
+              isTabletLayout={isTabletLayout}
+            />
           ) : (
-            <div className="grid-section" style={{ position: 'relative', zIndex: 1 }}>
-              <div className="users-layout">
-                <div>
-                  <h2 style={{ fontSize: '18px', marginBottom: '12px' }}>Utenti registrati</h2>
-                  <div className="users-toolbar">
-                    <div className="search-container" style={{ maxWidth: '320px' }}>
-                      <Search className="search-icon" size={16} />
-                      <input
-                        className="search-input"
-                        style={{ padding: '10px 36px' }}
-                        value={userSearchTerm}
-                        onChange={e => setUserSearchTerm(e.target.value)}
-                        placeholder="Cerca utente..."
-                      />
-                    </div>
-                    <select
-                      className="role-filter"
-                      value={userRoleFilter}
-                      onChange={e => setUserRoleFilter(e.target.value as 'ALL' | 'ADMIN' | 'OPERATORE')}
-                    >
-                      <option value="ALL">Tutti i ruoli</option>
-                      <option value="ADMIN">Solo Admin</option>
-                      <option value="OPERATORE">Solo Operatori</option>
-                    </select>
-                    <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#64748b', fontWeight: 700 }}>
-                      Totale visibili: {filteredUsers.length}
-                    </span>
-                  </div>
-                  <table className="log-table">
-                    <thead>
-                      <tr>
-                        <th>Username</th>
-                        <th>Password</th>
-                        <th>Ruolo</th>
-                        <th style={{ textAlign: 'right' }}>Azioni</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-                            Nessun utente corrisponde ai filtri selezionati
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredUsers.map((u: AppUser) => (
-                          <tr key={u.id}>
-                            <td style={{ fontWeight: 700 }}>{u.username}</td>
-                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>********</td>
-                            <td>
-                              <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '999px', border: '1px solid', background: u.ruolo === 'ADMIN' ? '#dbeafe' : '#f1f5f9', color: u.ruolo === 'ADMIN' ? '#1e40af' : '#64748b', borderColor: u.ruolo === 'ADMIN' ? '#bfdbfe' : '#e2e8f0' }}>
-                                {u.ruolo}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              {u.username !== 'admin' && (
-                                <button
-                                  className="btn btn-danger"
-                                  style={{ padding: '6px 10px', borderRadius: '8px', marginLeft: 'auto', fontSize: '12px' }}
-                                  onClick={() => handleDeleteUser(u.id)}
-                                >
-                                  <Trash2 size={14} /> Elimina
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+            <UsersSection
+              filteredUsers={filteredUsers}
+              userSearchTerm={userSearchTerm}
+              setUserSearchTerm={setUserSearchTerm}
+              userRoleFilter={userRoleFilter}
+              setUserRoleFilter={setUserRoleFilter}
+              isTabletLayout={isTabletLayout}
+              userFormData={userFormData}
+              setUserFormData={setUserFormData}
+              handleCreateUser={handleCreateUser}
+              handleDeleteUser={handleDeleteUser}
+            />
+          )}
 
-                <div className="sidebar" style={{ width: '100%' }}>
-                  <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Crea utente</h2>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>Inserisci i dati e assegna il ruolo.</p>
-                  <div className="form-group">
-                    <label className="form-label">Username</label>
-                    <input
-                      className="form-input"
-                      value={userFormData.username}
-                      onChange={e => setUserFormData({ ...userFormData, username: e.target.value })}
-                      placeholder="es. mario.rossi"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Password</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={userFormData.password}
-                      onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
-                      placeholder="Password iniziale"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Ruolo</label>
-                    <select
-                      className="form-input"
-                      value={userFormData.ruolo}
-                      onChange={e => setUserFormData({ ...userFormData, ruolo: e.target.value as 'ADMIN' | 'OPERATORE' })}
-                    >
-                      <option value="OPERATORE">Operatore</option>
-                      <option value="ADMIN">Amministratore</option>
-                    </select>
-                  </div>
-                  <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: '10px' }} onClick={handleCreateUser}>
-                    <Plus size={18} /> Crea utente
-                  </button>
-                  <div style={{ fontSize: '11px', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
-                    Suggerimento: usa password iniziali semplici da comunicare e cambiale al primo accesso.
-                  </div>
-                </div>
-              </div>
-            </div>
+          {isTabletLayout && activeTab === 'grid' && mode === 'view' && selectedArticolo && (
+            <TabletActionBar
+              selectedArticolo={selectedArticolo}
+              statusLabel={getStatusMeta(selectedArticolo.stato).label}
+              movementActions={renderMovementActionButtons(selectedArticolo, true)}
+              canDeleteSelectedArticolo={canDeleteSelectedArticolo}
+              onDelete={() => handleDeleteArticolo(selectedArticolo)}
+              onEdit={() => startEditArticolo(selectedArticolo)}
+            />
           )}
 
           {/* MODALS */}
-          {articoloActionMenu && actionMenuArticolo && (
-            <div className="menu-overlay" onClick={() => setArticoloActionMenu(null)}>
-              <div
-                className="articolo-action-menu"
-                style={{
-                  left: Math.max(12, Math.min(articoloActionMenu.x + 8, window.innerWidth - 232)),
-                  top: Math.max(12, Math.min(articoloActionMenu.y + 8, window.innerHeight - 100))
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="articolo-action-title">{actionMenuArticolo.codice}</div>
-                <button className="articolo-action-button" onClick={() => startEditArticolo(actionMenuArticolo)}>
-                  Modifica dati articolo
-                </button>
-                <button className="articolo-action-button" style={{ marginTop: '6px', background: '#fee2e2', color: '#b91c1c' }} onClick={() => handleDeleteArticolo(actionMenuArticolo)}>
-                  Elimina articolo
-                </button>
-              </div>
-            </div>
-          )}
-
           {showEditModal && (
             <div className="modal-overlay" onClick={() => {
               setShowEditModal(false);
@@ -2876,7 +2598,7 @@ const LogiTrackVasche = () => {
                     Seleziona una pila libera
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${solettaColumns}, minmax(0, 1fr))`, gap: '10px' }}>
                   {SOLETTA_PILES.map(pile => {
                     const isValid = validRelocationPiles.has(pile);
                     return (
@@ -2963,6 +2685,12 @@ const LogiTrackVasche = () => {
             </div>
           )}
 
+          {toast && (
+            <div className={`app-toast ${toast.type}`}>
+              {toast.message}
+            </div>
+          )}
+
           {hoveredArticolo && <DetailTooltip vasca={hoveredArticolo} pos={mousePos} />}
         </>
       )}
@@ -2971,5 +2699,3 @@ const LogiTrackVasche = () => {
 };
 
 export default LogiTrackVasche;
-
-

@@ -1,3 +1,4 @@
+const { promisify } = require('util');
 const SOLETTA_MAX_LEVELS = 10;
 const ROW_LENGTHS = {
     A: 63.38,
@@ -101,41 +102,9 @@ function validateArticleTransition(currentArticle, nextArticle, peerArticles) {
     return null;
 }
 
-function runAsync(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) {
-                reject(err);
-                return;
-            }
-            resolve(this);
-        });
-    });
-}
-
-function getAsync(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.get(sql, params, (err, row) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            resolve(row || null);
-        });
-    });
-}
-
-function allAsync(db, sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            resolve(rows || []);
-        });
-    });
-}
+const runAsync = (db, sql, params = []) => promisify(db.run).bind(db)(sql, params);
+const getAsync = (db, sql, params = []) => promisify(db.get).bind(db)(sql, params);
+const allAsync = (db, sql, params = []) => promisify(db.all).bind(db)(sql, params);
 
 async function relevelSolettaPile(db, pile) {
     if (!pile) return [];

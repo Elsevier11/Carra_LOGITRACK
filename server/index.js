@@ -501,7 +501,7 @@ app.delete('/api/articoli/:id', requireAuth, (req, res) => {
             `SELECT COUNT(*) AS total
              FROM registro
              WHERE vasca_id = ?
-               AND tipo IN ('ENTRATA', 'SPOSTAMENTO', 'MOVIMENTAZIONE', 'USCITA', 'SPEDIZIONE')`,
+               AND UPPER(TRIM(COALESCE(tipo, ''))) <> 'CREAZIONE'`,
             [id],
             (logErr, row) => {
                 if (logErr) {
