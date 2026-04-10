@@ -721,10 +721,6 @@ const LogiTrackVasche = () => {
   }, [selectedArticolo]);
 
   useEffect(() => {
-    setArticoloActionMenu(null);
-  }, [mode, currentCategory, activeTab]);
-
-  useEffect(() => {
     setIsUserMenuOpen(false);
   }, [activeTab, currentCategory]);
 
