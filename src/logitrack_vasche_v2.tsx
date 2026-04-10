@@ -7,6 +7,7 @@ import SelectionCard from './components/logitrack/SelectionCard';
 import InventorySidebarPanel from './components/logitrack/InventorySidebarPanel';
 import { DetailTooltip, ArticoloBlock, SolettaBlock } from './components/logitrack/GridBlocks';
 import { apiFetch } from './components/logitrack/api';
+import carraLogo from './carra-logo.png';
 import {
   SOLETTA_PILES,
   SOLETTA_MAX_LEVELS,
@@ -1442,15 +1443,20 @@ const LogiTrackVasche = () => {
         .app { max-width: 100%; margin: 0 auto; padding: 12px 16px; position: relative; }
         
         /* Layout Blocks */
-        .header { background: white; padding: 12px 16px; border-radius: 14px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.45); margin-bottom: 10px; border-top: 3px solid #3b82f6; }
+        .header { background: linear-gradient(180deg, #0e66bd 0%, #0a57a6 100%); padding: 10px 16px; border-radius: 14px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.45); margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.16); }
         .header h1 { font-size: 24px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
         .header p { color: #64748b; font-size: 14px; }
-        .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .header-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .header-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+        .header-left { display: flex; align-items: center; gap: 16px; min-width: 0; flex-wrap: nowrap; }
+        .brand-logo-wrap { width: 184px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); box-shadow: inset 0 1px 0 rgba(255,255,255,0.2); flex-shrink: 0; overflow: hidden; }
+        .brand-logo { max-width: 94%; max-height: 36px; width: auto; height: auto; display: block; object-fit: contain; }
+        .brand-cluster { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .app-title { font-size: 22px; letter-spacing: -0.3px; margin-bottom: 0; color: #ffffff; white-space: nowrap; }
+        .app-version { color: rgba(255,255,255,0.72); font-weight: 500; }
         .header-right { display: flex; align-items: center; gap: 10px; position: relative; }
         .user-menu { position: relative; }
-        .user-menu-trigger { background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%); color: #1d4ed8; padding: 8px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; border: 1px solid #bfdbfe; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
-        .user-menu-role { color: #64748b; font-weight: 700; }
+        .user-menu-trigger { background: rgba(255,255,255,0.16); color: #ffffff; padding: 8px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.25); cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,0.22); }
+        .user-menu-role { color: rgba(255,255,255,0.74); font-weight: 700; }
         .user-menu-panel { position: absolute; top: calc(100% + 10px); right: 0; width: 190px; background: white; border: 1px solid #dbe3ef; border-radius: 14px; box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.4); padding: 8px; z-index: 40; }
         .user-menu-item { width: 100%; border: none; background: transparent; text-align: left; padding: 10px 12px; border-radius: 10px; color: #334155; font-size: 13px; font-weight: 700; cursor: pointer; }
         .user-menu-item:hover { background: #f8fafc; }
@@ -1649,6 +1655,9 @@ const LogiTrackVasche = () => {
           .app { padding: 10px 12px 120px; }
           .header { padding: 10px 12px; }
           .header h1 { font-size: 21px; }
+          .brand-logo-wrap { width: 160px; height: 40px; }
+          .brand-logo { max-height: 32px; }
+          .app-title { font-size: 19px; }
           .content { grid-template-columns: 1fr; }
           .content.grid-focus { min-height: auto; }
           .sidebar { position: static; top: auto; }
@@ -1664,7 +1673,12 @@ const LogiTrackVasche = () => {
         }
         @media (max-width: 768px) {
           .app { padding: 8px 8px 126px; }
-          .header-left { gap: 10px; }
+          .header-left { gap: 8px; flex-wrap: wrap; }
+          .brand-logo-wrap { width: 132px; height: 34px; }
+          .brand-logo { max-height: 26px; }
+          .brand-cluster { gap: 8px; }
+          .app-title { font-size: 17px; }
+          .product-tab { padding: 7px 10px; font-size: 12px; }
           .nav-tabs { gap: 8px; padding: 0 8px; overflow-x: auto; }
           .nav-tab { font-size: 14px; white-space: nowrap; }
           .ruler { font-size: 9px; padding: 0 36px 0 52px; }
@@ -1725,11 +1739,11 @@ const LogiTrackVasche = () => {
         .log-type.entrata { background: #dcfce7; color: #15803d; }
         .log-type.spostamento, .log-type.movimentazione { background: #fef3c7; color: #b45309; }
         .log-type.uscita, .log-type.spedizione { background: #fee2e2; color: #b91c1c; }
-        .product-tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 12px; }
-        .product-tab { padding: 8px 16px; border-radius: 8px; font-weight: 800; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #64748b; }
+        .product-tabs { display: flex; gap: 6px; background: rgba(255,255,255,0.14); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); }
+        .product-tab { padding: 8px 14px; border-radius: 8px; font-weight: 800; cursor: pointer; transition: all 0.2s; font-size: 13px; color: rgba(255,255,255,0.88); }
         .product-tab-content { display: flex; align-items: center; gap: 8px; }
-        .product-tab:hover { background: #e2e8f0; }
-        .product-tab.active { background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .product-tab:hover { background: rgba(255,255,255,0.2); }
+        .product-tab.active { background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.12); }
         .product-tab.active.vasca { color: #3b82f6; }
         .product-tab.active.soletta { color: #f59e0b; }
         .faded { opacity: 0.25; filter: grayscale(0.5); }
@@ -1783,28 +1797,29 @@ const LogiTrackVasche = () => {
           <header className="header" style={{ position: 'relative', zIndex: 10 }}>
             <div className="header-top">
               <div className="header-left">
-                <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Package size={28} color="#3b82f6" />
-                  <h1 style={{ fontSize: '22px', letterSpacing: '-0.4px', marginBottom: 0 }}>LogiTrack <span style={{ color: '#94a3b8', fontWeight: 400 }}>v2.6</span></h1>
+                <div className="brand-logo-wrap">
+                  <img src={carraLogo} alt="Carra Depurazioni" className="brand-logo" />
                 </div>
-
-                <div className="product-tabs">
-                  {visibleCategories.map(cat => (
-                    <div
-                      key={cat}
-                      className={`product-tab ${currentCategory === cat ? 'active' : ''} ${cat.toLowerCase()}`}
-                      onClick={() => {
-                        setCurrentCategory(cat);
-                        setSelectedArticolo(null);
-                        setMode('view');
-                      }}
-                    >
-                      <div className="product-tab-content">
-                        {cat === 'VASCA' ? <Waves size={16} /> : <Layers3 size={16} />}
-                        <span>{CATEGORY_LABELS[cat].tab}</span>
+                <div className="brand-cluster">
+                  <h1 className="app-title">LogiTrack <span className="app-version">v2.6</span></h1>
+                  <div className="product-tabs">
+                    {visibleCategories.map(cat => (
+                      <div
+                        key={cat}
+                        className={`product-tab ${currentCategory === cat ? 'active' : ''} ${cat.toLowerCase()}`}
+                        onClick={() => {
+                          setCurrentCategory(cat);
+                          setSelectedArticolo(null);
+                          setMode('view');
+                        }}
+                      >
+                        <div className="product-tab-content">
+                          {cat === 'VASCA' ? <Waves size={16} /> : <Layers3 size={16} />}
+                          <span>{CATEGORY_LABELS[cat].tab}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1918,13 +1933,7 @@ const LogiTrackVasche = () => {
                     </div>
                   )}
                 <div className="grid-section">
-                  {currentCategory === 'SOLETTA' ? (
-                    <div className="ruler" style={{ justifyContent: 'space-between' }}>
-                      <span>Pile affiancate: 12</span>
-                      <span>Altezza singola soletta: 20 cm</span>
-                      <span>Capienza: 10 per pila</span>
-                    </div>
-                  ) : (
+                  {currentCategory === 'SOLETTA' ? null : (
                     <div className="ruler">
                       {Array.from({ length: Math.floor(maxGridLength / rulerStep) + 1 }).map((_, i) => (
                         <span key={i}>{i * rulerStep}cm</span>
@@ -2045,7 +2054,8 @@ const LogiTrackVasche = () => {
                                       display: 'grid',
                                       gridTemplateColumns: `repeat(${solettaColumns}, minmax(${isMobileLayout ? 120 : 140}px, 1fr))`,
                                       gap: '12px',
-                                      alignItems: 'end'
+                                      alignItems: 'end',
+                                      marginTop: rowIndex === 1 ? '10px' : 0
                                     }}
                                   >
                                     {row.map((pile, index) => {
