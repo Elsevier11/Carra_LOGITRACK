@@ -318,8 +318,18 @@ const LogiTrackVasche = () => {
     return '';
   }, [canDeleteSelectedArticolo, selectedArticolo]);
   const handleArticoloClick = useCallback((event: React.MouseEvent, articolo: Articolo) => {
+    if (mode !== 'view') {
+      // Durante posizionamento/spostamento non cambiare articolo:
+      // il click su altri blocchi deve cadere sulla fila sottostante.
+      if (selectedArticolo && articolo.id !== selectedArticolo.id) {
+        return;
+      }
+      event.stopPropagation();
+      return;
+    }
+
     event.stopPropagation();
-    if (mode !== 'view' && !canSelectArticolo(articolo)) {
+    if (!canSelectArticolo(articolo)) {
       setShowInfoModal({
         title: 'Selezione non consentita',
         message: 'Solo le solette in cima alla pila possono essere selezionate.'
@@ -327,7 +337,7 @@ const LogiTrackVasche = () => {
       return;
     }
     setSelectedArticolo(articolo);
-  }, [canSelectArticolo, mode]);
+  }, [canSelectArticolo, mode, selectedArticolo]);
   const startEditArticolo = useCallback((articolo: Articolo) => {
     setShowConfirmModal({
       message: `Vuoi modificare i dati di ${articolo.codice}?`,
