@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+            xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+            xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+            xmlns:v="urn:schemas-microsoft-com:vml"
+            xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:w10="urn:schemas-microsoft-com:office:word"
+            xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+            xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"
+            xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+            xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+            xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+            xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+            mc:Ignorable="w14 w15 wp14">
+  <w:body>
+    <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>MANUALE DI INSTALLAZIONE E MESSA IN ESERCIZIO</w:t></w:r></w:p>
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Applicazione LogiTrack</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Documento tecnico-operativo</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1. Premessa</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Il presente documento descrive le attivita necessarie per installare, configurare e mettere in esercizio l'applicazione LogiTrack su un server Windows, nonche le principali misure di sicurezza da adottare per ridurre i rischi di accesso non autorizzato, compromissione del sistema o perdita dei dati.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>L'obiettivo e consentire un'installazione corretta e un utilizzo stabile dell'applicazione in ambiente aziendale interno.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2. Oggetto del documento</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Il documento copre i seguenti aspetti:</w:t></w:r></w:p>
+    <w:p><w:r><w:t>1. requisiti tecnici del server</w:t></w:r></w:p>
+    <w:p><w:r><w:t>2. struttura applicativa</w:t></w:r></w:p>
+    <w:p><w:r><w:t>3. procedura di installazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>4. procedura di avvio e messa in esercizio</w:t></w:r></w:p>
+    <w:p><w:r><w:t>5. configurazione minima di rete e firewall</w:t></w:r></w:p>
+    <w:p><w:r><w:t>6. backup e aggiornamenti</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7. avvertenze e raccomandazioni di sicurezza</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3. Descrizione sintetica dell'applicazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>LogiTrack e una procedura web per la gestione operativa di articoli di piazzale, attualmente organizzati nelle categorie Vasche e Solette.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>L'applicazione e composta da un frontend web React/Vite, un backend Node.js/Express e un database SQLite locale.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Alla data attuale, il backend pubblica sia le API applicative sia il frontend compilato. La porta di ascolto prevista dalla configurazione corrente e 3001/TCP.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>4. Architettura tecnica attuale</w:t></w:r></w:p>
+    <w:p><w:r><w:t>La soluzione e organizzata come segue: cartella principale del progetto per frontend e build; cartella server per backend e database SQLite; cartella dist per il frontend compilato.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Principali componenti: package.json nella root, server/package.json, server/index.js, server/database.js e server/vasche.db.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Il file server/vasche.db costituisce il database operativo dell'applicazione.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>5. Requisiti di sistema</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Requisiti hardware consigliati: minimo 2 vCPU, 4 GB RAM, spazio disco adeguato per applicazione e backup, accesso LAN aziendale o VPN.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Requisiti software: Windows Server 2019 o 2022, Node.js LTS 20.x o superiore, NPM incluso, accesso amministrativo per l'installazione iniziale.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Requisiti di esercizio: cartella locale dedicata, nome host o IP statico, possibilita di creare un servizio Windows o un'attivita pianificata, sistema di backup disponibile.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>6. Preparazione del server</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Prima dell'installazione si raccomanda di aggiornare il sistema operativo, verificare la protezione antivirus o EDR, predisporre un account di servizio dedicato se previsto, creare una cartella applicativa come C:\Apps\LogiTrack e limitare i permessi di accesso alla cartella ai soli amministratori e all'account di servizio.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>7. Procedura di installazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7.1 Copia dell'applicazione. Copiare l'intero contenuto del progetto nella cartella predisposta sul server, verificando la presenza di package.json, server/package.json, server/index.js e server/database.js.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7.2 Installazione dipendenze frontend. Aprire un prompt nella cartella principale ed eseguire: npm install</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7.3 Installazione dipendenze backend. Portarsi nella cartella server ed eseguire: npm install</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7.4 Compilazione frontend. Tornare nella cartella principale ed eseguire: npm run build</w:t></w:r></w:p>
+    <w:p><w:r><w:t>L'operazione genera la cartella dist, utilizzata dal backend per pubblicare l'interfaccia web.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>8. Avvio dell'applicazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>L'applicazione puo essere avviata dalla cartella principale del progetto mediante: node server/index.js</w:t></w:r></w:p>
+    <w:p><w:r><w:t>In alternativa: npm start</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Se l'avvio avviene correttamente, il servizio risponde all'indirizzo http://NOME_SERVER:3001 oppure http://IP_SERVER:3001</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>9. Messa in esercizio continuativa</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Per l'utilizzo in ambiente operativo, l'applicazione non deve essere eseguita manualmente in una finestra interattiva lasciata aperta. Deve invece essere avviata come processo gestito.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Soluzioni consigliate: servizio Windows tramite NSSM, attivita pianificata con avvio automatico al boot, oppure altro wrapper di servizio approvato dall'ufficio IT.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Configurazione raccomandata: avvio automatico, riavvio automatico in caso di errore, esecuzione con account di servizio dedicato, working directory impostata sulla cartella principale del progetto.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>10. Configurazione rete e firewall</w:t></w:r></w:p>
+    <w:p><w:r><w:t>L'applicazione utilizza la porta TCP 3001. La configurazione consigliata prevede apertura della porta solo verso subnet aziendali autorizzate, accesso consentito solo da LAN interna o VPN e blocco di accessi provenienti da reti pubbliche.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Indicazione tassativa: la porta 3001 non deve essere pubblicata direttamente su Internet.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>11. Verifiche post-installazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Effettuare almeno i seguenti controlli: apertura della pagina di login, autenticazione con utente valido, corretta visualizzazione di Vasche e Solette, creazione di un articolo di test, corretto salvataggio nel database, verifica delle funzioni di posizionamento e movimentazione, persistenza dei dati dopo riavvio del servizio.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>12. Backup e continuita operativa</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Il database attualmente in uso e il file server/vasche.db. Tale file deve essere incluso nelle procedure di backup aziendale.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Frequenza consigliata: backup almeno giornaliero, retention minima 14-30 giorni, copia su storage centralizzato o supporto protetto.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Prima di aggiornamenti applicativi: arrestare il servizio, eseguire copia di sicurezza del file server/vasche.db, effettuare l'aggiornamento, riavviare il servizio, eseguire controlli funzionali di base.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>13. Aggiornamento applicazione</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Procedura standard: fermare il servizio, eseguire backup del database, sostituire o aggiornare i file dell'applicazione, eseguire npm install nella root se richiesto, eseguire npm install nella cartella server se richiesto, eseguire npm run build, riavviare il servizio, verificare il corretto funzionamento.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>14. Avvertenze di sicurezza</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Alla data attuale, l'applicazione deve essere considerata una soluzione adatta all'uso interno in ambiente controllato, non una piattaforma pronta per esposizione diretta verso Internet.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Principali criticita attuali: password utenti memorizzate in chiaro nel database, autenticazione priva di hashing, sessione mantenuta lato browser, endpoint backend non protetti da un sistema avanzato di autenticazione e autorizzazione, configurazione CORS permissiva, presenza di credenziali iniziali di default.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Queste condizioni comportano un livello di esposizione non compatibile con pubblicazione diretta su reti pubbliche.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>15. Misure minime obbligatorie prima della messa in esercizio</w:t></w:r></w:p>
+    <w:p><w:r><w:t>1. modificare immediatamente le credenziali di default</w:t></w:r></w:p>
+    <w:p><w:r><w:t>2. limitare l'accesso al server ai soli amministratori autorizzati</w:t></w:r></w:p>
+    <w:p><w:r><w:t>3. proteggere RDP mediante VPN e policy restrittive</w:t></w:r></w:p>
+    <w:p><w:r><w:t>4. aprire la porta applicativa solo a LAN aziendale o VPN</w:t></w:r></w:p>
+    <w:p><w:r><w:t>5. applicare tutte le patch di sicurezza al server</w:t></w:r></w:p>
+    <w:p><w:r><w:t>6. mantenere aggiornato Node.js</w:t></w:r></w:p>
+    <w:p><w:r><w:t>7. attivare antivirus o EDR sul server</w:t></w:r></w:p>
+    <w:p><w:r><w:t>8. attivare backup automatici del database</w:t></w:r></w:p>
+    <w:p><w:r><w:t>9. applicare permessi NTFS restrittivi alla cartella applicativa</w:t></w:r></w:p>
+    <w:p><w:r><w:t>10. monitorare errori di servizio e accessi anomali</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>16. Misure raccomandate per una sicurezza adeguata</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Per un utilizzo piu sicuro e strutturato, si raccomanda di pianificare un'evoluzione applicativa con hashing delle password, autenticazione server-side robusta, autorizzazioni per ruolo sugli endpoint, rimozione delle password dalle risposte API, rate limiting sul login, limitazione CORS ai soli host autorizzati, pubblicazione dietro reverse proxy HTTPS, audit log dei tentativi di accesso e hardening del server applicativo.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>17. Credenziali iniziali</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Qualora siano presenti utenti predefiniti o credenziali iniziali, queste non devono rimanere in uso in ambiente operativo. Devono essere sostituite immediatamente, comunicate solo al personale autorizzato e ruotate secondo le policy aziendali.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>18. Limitazioni note</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Nello stato attuale il database e locale al server, non e presente un motore SQL Server o altra base dati centralizzata e l'applicazione richiede particolare attenzione sul piano della sicurezza se destinata a piu utenti o a reti estese.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>19. Raccomandazione finale</w:t></w:r></w:p>
+    <w:p><w:r><w:t>La soluzione puo essere installata e utilizzata senza particolare complessita in ambiente aziendale interno, purche siano rispettate le seguenti condizioni: installazione su server interno dedicato o controllato, accesso esclusivo tramite LAN aziendale o VPN, avvio come servizio automatico, backup regolare del database, sostituzione immediata delle credenziali di default, limitazione degli accessi amministrativi al server.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>In assenza delle misure sopra indicate, la messa in esercizio non e raccomandata.</w:t></w:r></w:p>
+
+    <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>20. Allegato operativo sintetico</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Comandi principali:</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Installazione dipendenze frontend: npm install</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Installazione dipendenze backend: cd server; npm install</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Build frontend: cd ..; npm run build</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Avvio applicazione: node server/index.js</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Indirizzo applicazione: http://server:3001</w:t></w:r></w:p>
+
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

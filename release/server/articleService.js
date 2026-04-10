@@ -1,16 +1,16 @@
 const SOLETTA_MAX_LEVELS = 10;
 const ROW_LENGTHS = {
-    A: 6338,
-    B: 6338,
-    C: 6338,
-    D: 6338,
-    E: 3722,
-    F: 3722,
-    G: 3722,
-    H: 3722,
-    I: 3722,
-    L: 4878,
-    M: 4878
+    A: 63.38,
+    B: 63.38,
+    C: 63.38,
+    D: 63.38,
+    E: 37.22,
+    F: 37.22,
+    G: 37.22,
+    H: 37.22,
+    I: 37.22,
+    L: 48.78,
+    M: 48.78
 };
 
 function getRowLength(rowName) {
@@ -20,7 +20,7 @@ function getRowLength(rowName) {
 function buildPositionLabel(tipo, fila, offsetInizio, livello) {
     if (!fila) return null;
     if (tipo === 'SOLETTA') return `${fila} @ Pila (L${livello})`;
-    return `${fila} @ ${Math.round(Number(offsetInizio || 0))}cm (L${livello})`;
+    return `${fila} @ ${Number(offsetInizio || 0).toFixed(2)}m (L${livello})`;
 }
 
 function validateArticleTransition(currentArticle, nextArticle, peerArticles) {

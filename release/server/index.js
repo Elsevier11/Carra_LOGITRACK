@@ -26,8 +26,7 @@ const allowedOrigins = new Set([
     'http://127.0.0.1:3001',
     'http://localhost:3001',
     'http://127.0.0.1:5173',
-    'http://localhost:5173',
-    'http://192.168.1.88:3001',
+    'http://localhost:5173'
 ]);
 
 app.disable('x-powered-by');
@@ -210,19 +209,13 @@ app.get('/api/articoli', requireAuth, (_req, res) => {
             livello: row.livello,
             colore: row.colore,
             stato: row.stato,
-            dataCreazione: row.data_creazione,
-            altezzaVascaCm: row.altezza_vasca_cm,
-            lunghezzaSolettaCm: row.lunghezza_soletta_cm,
-            altezzaSolettaCm: row.altezza_soletta_cm
+            dataCreazione: row.data_creazione
         })));
     });
 });
 
 app.post('/api/articoli', requireAuth, (req, res) => {
-    const {
-        id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello,
-        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm
-    } = req.body;
+    const { id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello } = req.body;
     const normalizedType = SUPPORTED_ARTICLE_TYPES.has(tipo) ? tipo : 'VASCA';
     const normalizedState = SUPPORTED_ARTICLE_STATES.has(stato) ? stato : 'CREATA';
 
@@ -230,171 +223,93 @@ app.post('/api/articoli', requireAuth, (req, res) => {
     if (!isNonEmptyString(codice) || !isNonEmptyString(cliente) || !isNonEmptyString(commessa)) {
         return sendValidationError(res, 'Campi articolo obbligatori mancanti');
     }
-    if (typeof lunghezza !== 'number' || Number.isNaN(lunghezza) || lunghezza <= 0 || !Number.isInteger(lunghezza)) {
-        return sendValidationError(res, 'Lunghezza non valida (usa centimetri interi)');
-    }
-    if (altezzaVascaCm !== undefined && altezzaVascaCm !== null && (!Number.isInteger(altezzaVascaCm) || altezzaVascaCm <= 0)) {
-        return sendValidationError(res, 'Altezza vasca non valida');
-    }
-    if (lunghezzaSolettaCm !== undefined && lunghezzaSolettaCm !== null && (!Number.isInteger(lunghezzaSolettaCm) || lunghezzaSolettaCm <= 0)) {
-        return sendValidationError(res, 'Lunghezza soletta non valida');
-    }
-    if (altezzaSolettaCm !== undefined && altezzaSolettaCm !== null && (!Number.isInteger(altezzaSolettaCm) || altezzaSolettaCm <= 0)) {
-        return sendValidationError(res, 'Altezza soletta non valida');
+    if (typeof lunghezza !== 'number' || Number.isNaN(lunghezza) || lunghezza <= 0) {
+        return sendValidationError(res, 'Lunghezza non valida');
     }
     if (!isNonEmptyString(colore) || !isNonEmptyString(dataCreazione)) {
         return sendValidationError(res, 'Colore o data creazione mancanti');
     }
 
-    const sql = `INSERT INTO articoli (
-        id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, colore, stato, data_creazione,
-        altezza_vasca_cm, lunghezza_soletta_cm, altezza_soletta_cm
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const params = [
-        id,
-        codice.trim(),
-        cliente.trim(),
-        commessa.trim(),
-        lunghezza,
-        null,
-        normalizeNullableString(fila),
-        offsetInizio ?? null,
-        normalizedType,
-        livello || 1,
-        colore,
-        normalizedState,
-        dataCreazione,
-        normalizedType === 'VASCA' ? (altezzaVascaCm ?? null) : null,
-        normalizedType === 'SOLETTA' ? (lunghezzaSolettaCm ?? lunghezza) : null,
-        normalizedType === 'SOLETTA' ? (altezzaSolettaCm ?? null) : null
-    ];
-
-    db.run(sql, params, function (insertErr) {
-        if (insertErr) {
-            res.status(500).json({ error: insertErr.message });
+    db.get('SELECT id FROM articoli WHERE codice = ?', [codice.trim()], (err, row) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
             return;
         }
-        res.status(201).json({ id, message: 'Elemento creato correttamente' });
+        if (row) {
+            res.status(409).json({ error: `Il codice '${codice}' esiste già.` });
+            return;
+        }
+
+        const sql = `INSERT INTO articoli (id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, colore, stato, data_creazione)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const params = [
+            id,
+            codice.trim(),
+            cliente.trim(),
+            commessa.trim(),
+            lunghezza,
+            null,
+            normalizeNullableString(fila),
+            offsetInizio ?? null,
+            normalizedType,
+            livello || 1,
+            colore,
+            normalizedState,
+            dataCreazione
+        ];
+
+        db.run(sql, params, function (insertErr) {
+            if (insertErr) {
+                res.status(500).json({ error: insertErr.message });
+                return;
+            }
+            res.status(201).json({ id, message: 'Elemento creato correttamente' });
+        });
     });
 });
+
 app.put('/api/articoli/:id', requireAuth, (req, res) => {
     const { id } = req.params;
-    const {
-        posizione, fila, offsetInizio, stato, livello, codice, cliente, commessa,
-        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm
-    } = req.body;
-    const metadataPatch = {};
-    const hasStatePatch = posizione !== undefined || fila !== undefined || offsetInizio !== undefined || stato !== undefined || livello !== undefined;
-    const hasMetadataPatch =
-        codice !== undefined || cliente !== undefined || commessa !== undefined ||
-        altezzaVascaCm !== undefined || lunghezzaSolettaCm !== undefined || altezzaSolettaCm !== undefined;
+    const { posizione, fila, offsetInizio, stato, livello } = req.body;
 
     if (stato !== undefined && !SUPPORTED_ARTICLE_STATES.has(stato)) {
         return sendValidationError(res, 'Stato non valido');
     }
-    if (offsetInizio !== undefined && offsetInizio !== null && (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0 || !Number.isInteger(offsetInizio))) {
+    if (offsetInizio !== undefined && offsetInizio !== null && (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0)) {
         return sendValidationError(res, 'Offset non valido');
     }
     if (livello !== undefined && (typeof livello !== 'number' || Number.isNaN(livello) || livello < 0)) {
         return sendValidationError(res, 'Livello non valido');
     }
-    if (codice !== undefined) {
-        if (!isNonEmptyString(codice)) return sendValidationError(res, 'Codice non valido');
-        metadataPatch.codice = codice.trim();
-    }
-    if (cliente !== undefined) {
-        if (!isNonEmptyString(cliente)) return sendValidationError(res, 'Cliente non valido');
-        metadataPatch.cliente = cliente.trim();
-    }
-    if (commessa !== undefined) {
-        if (!isNonEmptyString(commessa)) return sendValidationError(res, 'Commessa non valida');
-        metadataPatch.commessa = commessa.trim();
-    }
-    if (altezzaVascaCm !== undefined) {
-        if (altezzaVascaCm !== null && (!Number.isInteger(altezzaVascaCm) || altezzaVascaCm <= 0)) return sendValidationError(res, 'Altezza vasca non valida');
-        metadataPatch.altezza_vasca_cm = altezzaVascaCm;
-    }
-    if (lunghezzaSolettaCm !== undefined) {
-        if (lunghezzaSolettaCm !== null && (!Number.isInteger(lunghezzaSolettaCm) || lunghezzaSolettaCm <= 0)) return sendValidationError(res, 'Lunghezza soletta non valida');
-        metadataPatch.lunghezza_soletta_cm = lunghezzaSolettaCm;
-    }
-    if (altezzaSolettaCm !== undefined) {
-        if (altezzaSolettaCm !== null && (!Number.isInteger(altezzaSolettaCm) || altezzaSolettaCm <= 0)) return sendValidationError(res, 'Altezza soletta non valida');
-        metadataPatch.altezza_soletta_cm = altezzaSolettaCm;
-    }
 
-    if (!hasStatePatch && !hasMetadataPatch) {
+    if (posizione === undefined && fila === undefined && offsetInizio === undefined && stato === undefined && livello === undefined) {
         return sendValidationError(res, 'Nessun campo da aggiornare');
     }
 
-    const sendUpdatedArticle = () => {
-        db.get('SELECT * FROM articoli WHERE id = ?', [id], (getErr, row) => {
-            if (getErr) {
-                res.status(500).json({ error: getErr.message });
+    mutateArticleState(db, id, {
+        posizione,
+        fila: fila !== undefined ? normalizeNullableString(fila) : undefined,
+        offsetInizio,
+        stato,
+        livello
+    })
+        .then((result) => {
+            if (result.error) {
+                res.status(result.status || 400).json({ error: result.error });
                 return;
             }
-            if (!row) {
-                res.status(404).json({ error: 'Articolo non trovato' });
-                return;
-            }
-            res.json({ message: 'Elemento aggiornato correttamente', articolo: row });
-        });
-    };
-
-    const applyMetadataPatch = () => {
-        const entries = Object.entries(metadataPatch);
-        if (entries.length === 0) {
-            sendUpdatedArticle();
-            return;
-        }
-
-        const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-        const values = entries.map(([, value]) => value);
-        db.run(`UPDATE articoli SET ${setClause} WHERE id = ?`, [...values, id], function (updateErr) {
-            if (updateErr) {
-                res.status(500).json({ error: updateErr.message });
-                return;
-            }
-            if (this.changes === 0) {
-                res.status(404).json({ error: 'Articolo non trovato' });
-                return;
-            }
-            sendUpdatedArticle();
-        });
-    };
-
-    const runStatePatch = () => {
-        if (!hasStatePatch) {
-            applyMetadataPatch();
-            return;
-        }
-
-        mutateArticleState(db, id, {
-            posizione,
-            fila: fila !== undefined ? normalizeNullableString(fila) : undefined,
-            offsetInizio,
-            stato,
-            livello
+            res.json({ message: 'Elemento aggiornato correttamente', articolo: result.article });
         })
-            .then((result) => {
-                if (result.error) {
-                    res.status(result.status || 400).json({ error: result.error });
-                    return;
-                }
-                applyMetadataPatch();
-            })
-            .catch((err) => {
-                res.status(500).json({ error: err.message });
-            });
-    };
-
-    runStatePatch();
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
 });
+
 app.post('/api/articoli/:id/position', requireAuth, (req, res) => {
     const { id } = req.params;
     const { fila, offsetInizio } = req.body;
     if (!isNonEmptyString(fila)) return sendValidationError(res, 'Fila obbligatoria');
-    if (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0 || !Number.isInteger(offsetInizio)) {
+    if (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0) {
         return sendValidationError(res, 'Offset non valido');
     }
 
@@ -417,7 +332,7 @@ app.post('/api/articoli/:id/move', requireAuth, (req, res) => {
     const { id } = req.params;
     const { fila, offsetInizio } = req.body;
     if (!isNonEmptyString(fila)) return sendValidationError(res, 'Fila obbligatoria');
-    if (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0 || !Number.isInteger(offsetInizio)) {
+    if (typeof offsetInizio !== 'number' || Number.isNaN(offsetInizio) || offsetInizio < 0) {
         return sendValidationError(res, 'Offset non valido');
     }
 
@@ -457,51 +372,19 @@ app.post('/api/articoli/:id/ship', requireAuth, (req, res) => {
 
 app.delete('/api/articoli/:id', requireAuth, (req, res) => {
     const { id } = req.params;
-    db.get('SELECT id, codice, stato FROM articoli WHERE id = ?', [id], (getErr, article) => {
-        if (getErr) {
-            res.status(500).json({ error: getErr.message });
+    db.run('DELETE FROM articoli WHERE id = ?', id, function (err) {
+        if (err) {
+            res.status(500).json({ error: err.message });
             return;
         }
-        if (!article) {
-            res.status(404).json({ error: 'Articolo non trovato' });
-            return;
-        }
-        if (article.stato !== 'CREATA') {
-            res.status(400).json({ error: 'Cancellazione consentita solo per articoli non ancora movimentati (stato CREATA)' });
-            return;
-        }
-
-        db.get(
-            `SELECT COUNT(*) AS total
-             FROM registro
-             WHERE vasca_id = ?
-               AND tipo IN ('ENTRATA', 'SPOSTAMENTO', 'MOVIMENTAZIONE', 'USCITA', 'SPEDIZIONE')`,
-            [id],
-            (logErr, row) => {
-                if (logErr) {
-                    res.status(500).json({ error: logErr.message });
-                    return;
-                }
-                if ((row?.total || 0) > 0) {
-                    res.status(400).json({ error: 'Articolo gia movimentato: cancellazione non consentita' });
-                    return;
-                }
-
-                db.run('DELETE FROM articoli WHERE id = ?', id, function (deleteErr) {
-                    if (deleteErr) {
-                        res.status(500).json({ error: deleteErr.message });
-                        return;
-                    }
-                    res.json({ message: `Articolo ${article.codice} eliminato correttamente` });
-                });
-            }
-        );
+        res.json({ message: 'Vasca eliminata correttamente' });
     });
 });
+
 // --- API REGISTRO ---
 
 app.get('/api/registro', requireAuth, (_req, res) => {
-    db.all('SELECT * FROM registro ORDER BY recorded_at DESC', [], (err, rows) => {
+    db.all('SELECT * FROM registro ORDER BY timestamp DESC', [], (err, rows) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -514,26 +397,22 @@ app.get('/api/registro', requireAuth, (_req, res) => {
             vascaColore: row.vasca_colore,
             dettagli: row.dettagli,
             utenteNome: row.utente_nome,
-            timestamp: row.recorded_at || row.timestamp,
-            recordedAt: row.recorded_at || row.timestamp,
-            eventAt: row.event_at || row.recorded_at || row.timestamp
+            timestamp: row.timestamp
         })));
     });
 });
 
 app.post('/api/registro', requireAuth, (req, res) => {
-    const { id, tipo, vascaId, vascaCodice, vascaColore, dettagli, utenteNome, eventAt } = req.body;
+    const { id, tipo, vascaId, vascaCodice, vascaColore, dettagli, utenteNome, timestamp } = req.body;
     if (!isNonEmptyString(id) || !isNonEmptyString(tipo) || !isNonEmptyString(vascaCodice) || !isNonEmptyString(vascaColore) || !isNonEmptyString(dettagli)) {
         return sendValidationError(res, 'Dati log incompleti');
     }
-    if (eventAt !== undefined && (typeof eventAt !== 'number' || Number.isNaN(eventAt))) {
-        return sendValidationError(res, 'Data evento non valida');
+    if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
+        return sendValidationError(res, 'Timestamp log non valido');
     }
 
-    const recordedAt = Date.now();
-    const normalizedEventAt = eventAt !== undefined ? eventAt : recordedAt;
-    const sql = `INSERT INTO registro (id, tipo, vasca_id, vasca_codice, vasca_colore, dettagli, utente_nome, timestamp, recorded_at, event_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO registro (id, tipo, vasca_id, vasca_codice, vasca_colore, dettagli, utente_nome, timestamp)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [
         id,
         tipo,
@@ -542,9 +421,7 @@ app.post('/api/registro', requireAuth, (req, res) => {
         vascaColore,
         dettagli,
         req.user?.username || utenteNome || null,
-        recordedAt,
-        recordedAt,
-        normalizedEventAt
+        timestamp
     ];
 
     db.run(sql, params, function (err) {
@@ -555,6 +432,7 @@ app.post('/api/registro', requireAuth, (req, res) => {
         res.status(201).json({ id, message: 'Log creato correttamente' });
     });
 });
+
 app.delete('/api/registro', requireRole('ADMIN'), (_req, res) => {
     db.run('DELETE FROM registro', [], function (err) {
         if (err) {
@@ -565,45 +443,13 @@ app.delete('/api/registro', requireRole('ADMIN'), (_req, res) => {
     });
 });
 
-app.use(express.static(distPath, {
-    etag: true,
-    lastModified: true,
-    setHeaders(res, filePath) {
-        if (filePath.endsWith('index.html')) {
-            res.setHeader('Cache-Control', 'no-store');
-            return;
-        }
+app.use(express.static(distPath));
 
-        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-    }
-}));
-
-app.get('/{*path}', (req, res, next) => {
-    if (req.path.startsWith('/api')) {
-        next();
-        return;
-    }
-
-    // Non servire l'SPA come "finto" JS/CSS: evita pagine bianche quando il browser
-    // ha cache di vecchi asset hashed (riceverebbe HTML al posto di JS).
-    if (req.path.startsWith('/assets/')) {
-        res.status(404).end();
-        return;
-    }
-
-    const accept = req.headers.accept || '';
-    if (!accept.includes('text/html')) {
-        res.status(404).end();
-        return;
-    }
-
-    res.setHeader('Cache-Control', 'no-store');
+app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
 });
 
-const server = app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, () => {
     console.log(`Backend server in ascolto su http://localhost:${port}`);
 });
 
@@ -611,8 +457,3 @@ module.exports = {
     app,
     server
 };
-
-
-
-
-
