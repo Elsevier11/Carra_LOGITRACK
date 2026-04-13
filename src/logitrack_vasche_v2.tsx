@@ -30,6 +30,16 @@ const uuidv4 = () => {
   });
 };
 
+const getEmptyCreateFormData = () => ({
+  codice: '',
+  cliente: '',
+  commessa: '',
+  lunghezza: '',
+  altezzaVascaCm: '',
+  lunghezzaSolettaCm: '',
+  altezzaSolettaCm: ''
+});
+
 /**
  * MAIN COMPONENT
  */
@@ -52,6 +62,7 @@ const LogiTrackVasche = () => {
   const [filterType, setFilterType] = useState<'all' | 'in_area' | 'creata'>('all');
   const [selectedArticolo, setSelectedArticolo] = useState<Articolo | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [duplicateSourceArticolo, setDuplicateSourceArticolo] = useState<Articolo | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingArticoloId, setEditingArticoloId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({
@@ -68,15 +79,7 @@ const LogiTrackVasche = () => {
   const [ghostPosition, setGhostPosition] = useState<string | null>(null);
   const [hoveredArticolo, setHoveredArticolo] = useState<Articolo | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [formData, setFormData] = useState({
-    codice: '',
-    cliente: '',
-    commessa: '',
-    lunghezza: '',
-    altezzaVascaCm: '',
-    lunghezzaSolettaCm: '',
-    altezzaSolettaCm: ''
-  });
+  const [formData, setFormData] = useState(getEmptyCreateFormData);
   const [movementDateTime, setMovementDateTime] = useState(() => new Date().toISOString().slice(0, 16));
   const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
@@ -355,6 +358,33 @@ const LogiTrackVasche = () => {
         setShowEditModal(true);
       }
     });
+  }, []);
+  const openCreateArticoloModal = useCallback(() => {
+    setDuplicateSourceArticolo(null);
+    setFormData(getEmptyCreateFormData());
+    setShowCreateModal(true);
+  }, []);
+  const closeCreateArticoloModal = useCallback(() => {
+    setDuplicateSourceArticolo(null);
+    setShowCreateModal(false);
+  }, []);
+  const startDuplicateArticolo = useCallback((articolo: Articolo) => {
+    setCurrentCategory(articolo.tipo);
+    setMode('view');
+    setGhostPosition(null);
+    setDuplicateSourceArticolo(articolo);
+    setFormData({
+      codice: articolo.codice,
+      cliente: articolo.cliente,
+      commessa: articolo.commessa,
+      lunghezza: articolo.tipo === 'VASCA' ? String(articolo.lunghezza) : '',
+      altezzaVascaCm: articolo.altezzaVascaCm ? String(articolo.altezzaVascaCm) : '',
+      lunghezzaSolettaCm: articolo.tipo === 'SOLETTA'
+        ? String(articolo.lunghezzaSolettaCm ?? articolo.lunghezza)
+        : '',
+      altezzaSolettaCm: articolo.altezzaSolettaCm ? String(articolo.altezzaSolettaCm) : ''
+    });
+    setShowCreateModal(true);
   }, []);
   const activateMoveMode = useCallback((articolo: Articolo | null) => {
     if (!articolo || articolo.stato !== 'IN_AREA') return;
@@ -905,8 +935,8 @@ const LogiTrackVasche = () => {
       if (res.ok) {
         setArticoli(prev => [...prev, newArticolo]);
         addLog('CREAZIONE', newArticolo, `Creato nuovo ${newArticolo.tipo.toLowerCase()} per cliente ${newArticolo.cliente}`);
-        setShowCreateModal(false);
-        setFormData({ codice: '', cliente: '', commessa: '', lunghezza: '', altezzaVascaCm: '', lunghezzaSolettaCm: '', altezzaSolettaCm: '' });
+        closeCreateArticoloModal();
+        setFormData(getEmptyCreateFormData());
         setSelectedArticolo(newArticolo);
         setFilterType('creata');
         setMode('position');
@@ -2262,6 +2292,7 @@ const LogiTrackVasche = () => {
                       movementActions={renderMovementActionButtons(selectedArticolo)}
                       deleteDisabledReason={deleteDisabledReason}
                       canDeleteSelectedArticolo={canDeleteSelectedArticolo}
+                      onDuplicate={() => startDuplicateArticolo(selectedArticolo)}
                       onEdit={() => startEditArticolo(selectedArticolo)}
                       onDelete={() => handleDeleteArticolo(selectedArticolo)}
                     />
@@ -2273,7 +2304,7 @@ const LogiTrackVasche = () => {
                     activeCount={activeArticoli.length}
                     inAreaCount={activeArticoli.filter(v => v.stato === 'IN_AREA').length}
                     createdCount={activeArticoli.filter(v => v.stato === 'CREATA').length}
-                    onCreate={() => setShowCreateModal(true)}
+                    onCreate={openCreateArticoloModal}
                     searchCliente={searchCliente}
                     setSearchCliente={setSearchCliente}
                     searchCommessa={searchCommessa}
@@ -2330,6 +2361,7 @@ const LogiTrackVasche = () => {
               movementActions={renderMovementActionButtons(selectedArticolo, true)}
               canDeleteSelectedArticolo={canDeleteSelectedArticolo}
               onDelete={() => handleDeleteArticolo(selectedArticolo)}
+              onDuplicate={() => startDuplicateArticolo(selectedArticolo)}
               onEdit={() => startEditArticolo(selectedArticolo)}
             />
           )}
@@ -2417,18 +2449,20 @@ const LogiTrackVasche = () => {
           )}
 
           {showCreateModal && (
-            <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+            <div className="modal-overlay" onClick={closeCreateArticoloModal}>
               <div className="modal" style={{ maxWidth: '680px' }} onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'grid', gap: '18px' }}>
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-                      Nuovo articolo
+                      {duplicateSourceArticolo ? 'Duplicazione articolo' : 'Nuovo articolo'}
                     </div>
                     <h2 style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <Plus color="#3b82f6" /> Crea {CATEGORY_LABELS[currentCategory].singular}
+                      <Plus color="#3b82f6" /> {duplicateSourceArticolo ? `Duplica ${CATEGORY_LABELS[currentCategory].singular}` : `Crea ${CATEGORY_LABELS[currentCategory].singular}`}
                     </h2>
                     <p style={{ color: '#475569', lineHeight: 1.5 }}>
-                      Inserisci i dati identificativi del pezzo. Dopo la creazione l'articolo sar&#224; in attesa e potrai posizionarlo nel piazzale.
+                      {duplicateSourceArticolo
+                        ? 'I dati sono stati precompilati dalla selezione corrente. Puoi modificarli e confermare con Salva.'
+                        : "Inserisci i dati identificativi del pezzo. Dopo la creazione l'articolo sar\u00e0 in attesa e potrai posizionarlo nel piazzale."}
                     </p>
                   </div>
 
@@ -2492,8 +2526,8 @@ const LogiTrackVasche = () => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
-                  <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowCreateModal(false)}>Annulla</button>
-                  <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleCreateArticolo}>Crea {CATEGORY_LABELS[currentCategory].singular}</button>
+                  <button className="btn btn-secondary" style={{ flex: 1 }} onClick={closeCreateArticoloModal}>Annulla</button>
+                  <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleCreateArticolo}>{duplicateSourceArticolo ? `Salva ${CATEGORY_LABELS[currentCategory].singular}` : `Crea ${CATEGORY_LABELS[currentCategory].singular}`}</button>
                 </div>
               </div>
             </div>

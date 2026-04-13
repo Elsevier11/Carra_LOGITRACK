@@ -11,6 +11,7 @@ interface TabletActionBarProps {
   movementActions: React.ReactNode;
   canDeleteSelectedArticolo: boolean;
   onDelete: () => void;
+  onDuplicate: () => void;
   onEdit: () => void;
 }
 
@@ -20,6 +21,7 @@ export default function TabletActionBar({
   movementActions,
   canDeleteSelectedArticolo,
   onDelete,
+  onDuplicate,
   onEdit
 }: TabletActionBarProps) {
   return (
@@ -39,6 +41,9 @@ export default function TabletActionBar({
             Elimina
           </button>
         )}
+        <button className="btn btn-secondary" onClick={onDuplicate}>
+          Duplica
+        </button>
         <button className="btn btn-secondary" onClick={onEdit}>
           Modifica
         </button>

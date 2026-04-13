@@ -26,6 +26,7 @@ interface SelectionCardProps {
   movementActions: React.ReactNode;
   deleteDisabledReason: string;
   canDeleteSelectedArticolo: boolean;
+  onDuplicate: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -42,6 +43,7 @@ export default function SelectionCard({
   movementActions,
   deleteDisabledReason,
   canDeleteSelectedArticolo,
+  onDuplicate,
   onEdit,
   onDelete
 }: SelectionCardProps) {
@@ -98,7 +100,14 @@ export default function SelectionCard({
           <div className="selection-actions">
             {movementActions}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ justifyContent: 'center' }}
+              onClick={onDuplicate}
+            >
+              Duplica
+            </button>
             <button
               className="btn btn-secondary"
               style={{ justifyContent: 'center' }}
