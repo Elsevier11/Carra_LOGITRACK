@@ -74,6 +74,7 @@ const LogiTrackVasche = () => {
     altezzaSolettaCm: ''
   });
   const [showConfirmModal, setShowConfirmModal] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [showShipConfirmModal, setShowShipConfirmModal] = useState<{ message: string; articolo: Articolo } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState<{ title?: string; message: string } | null>(null);
   const [mode, setMode] = useState<'view' | 'position' | 'move'>('view');
   const [ghostPosition, setGhostPosition] = useState<string | null>(null);
@@ -81,6 +82,7 @@ const LogiTrackVasche = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [formData, setFormData] = useState(getEmptyCreateFormData);
   const [movementDateTime, setMovementDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+  const [shipDateTime, setShipDateTime] = useState(() => new Date().toISOString().slice(0, 16));
   const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -622,6 +624,17 @@ const LogiTrackVasche = () => {
       console.error('Errore nel salvataggio del log:', err);
     }
   }, [currentUser, getSelectedEventTimestamp]);
+
+  const getShipEventTimestamp = useCallback(() => {
+    if (!shipDateTime) return Date.now();
+    const parsed = new Date(shipDateTime).getTime();
+    return Number.isNaN(parsed) ? Date.now() : parsed;
+  }, [shipDateTime]);
+
+  const openShipConfirmModal = useCallback((articolo: Articolo, message: string) => {
+    setShipDateTime(new Date().toISOString().slice(0, 16));
+    setShowShipConfirmModal({ articolo, message });
+  }, []);
 
   // --- Grid Logic ---
   const isPositionAvailable = useCallback((fila: string, offset: number, lunghezza: number, excludeId: string | null = null, tipo: Articolo['tipo'] = 'VASCA') => {
@@ -1264,13 +1277,7 @@ const LogiTrackVasche = () => {
 
     if (blockers.length === 0) {
       if (finalAction === 'ship') {
-        setShowConfirmModal({
-          message: `Scaricare ${target.codice}? La posizione sarÃ  liberata.`,
-          onConfirm: () => {
-            executeShipArticolo(target);
-            setShowConfirmModal(null);
-          }
-        });
+        openShipConfirmModal(target, `Scaricare ${target.codice}? La posizione sarÃ  liberata.`);
       }
       return;
     }
@@ -1330,13 +1337,10 @@ const LogiTrackVasche = () => {
       const flowHistory = [...solettaRelocationFlow.history, stepRecord];
       setSolettaRelocationFlow(null);
       if (finalAction === 'ship') {
-        setShowConfirmModal({
-          message: `Riposizionamento completato (${flowHistory.length} movimenti). Scaricare ${target.codice}?`,
-          onConfirm: () => {
-            executeShipArticolo(target);
-            setShowConfirmModal(null);
-          }
-        });
+        openShipConfirmModal(
+          target,
+          `Riposizionamento completato (${flowHistory.length} movimenti). Scaricare ${target.codice}?`
+        );
       } else if (finalAction === 'move' && destinationPile) {
         const targetNow = articoli.find(v => v.id === target.id) || target;
         const targetCheck = isPositionAvailable(destinationPile, 0, targetNow.lunghezza, targetNow.id, 'SOLETTA');
@@ -1371,7 +1375,7 @@ const LogiTrackVasche = () => {
     });
   };
 
-  const executeShipArticolo = async (vasca: Articolo) => {
+  const executeShipArticolo = async (vasca: Articolo, eventAt?: number) => {
     // LIFO check for stacked items.
     if (vasca.tipo === 'SOLETTA') {
       const itemAbove = articoli.find(v =>
@@ -1397,7 +1401,7 @@ const LogiTrackVasche = () => {
         setArticoli(prev => (prev as Articolo[]).map(v =>
           v.id === vasca.id ? { ...v, posizione: null, stato: 'SPEDITA', livello: 0, fila: null, offsetInizio: null } : v
         ));
-        addLog('SPEDIZIONE', vasca, 'Articolo scaricato correttamente');
+        addLog('SPEDIZIONE', vasca, 'Articolo scaricato correttamente', eventAt);
 
         if (vasca.fila && vasca.offsetInizio !== null) {
           applyGravity(vasca.fila, vasca.offsetInizio);
@@ -1422,13 +1426,7 @@ const LogiTrackVasche = () => {
       });
       return;
     }
-    setShowConfirmModal({
-      message: `Scaricare ${v.codice}? La posizione sarÃ  liberata.`,
-      onConfirm: () => {
-        executeShipArticolo(v);
-        setShowConfirmModal(null);
-      }
-    });
+    openShipConfirmModal(v, `Scaricare ${v.codice}? La posizione sarÃ  liberata.`);
   };
 
   const renderMovementActionButtons = (articolo: Articolo, compact: boolean = false) => (
@@ -2729,6 +2727,39 @@ const LogiTrackVasche = () => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button className="btn btn-primary" onClick={() => setShowInfoModal(null)}>
                     <Check size={16} /> Ho capito
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showShipConfirmModal && (
+            <div className="modal-overlay">
+              <div className="modal" style={{ maxWidth: '460px' }}>
+                <h2 style={{ fontSize: '20px' }}>Conferma scarico</h2>
+                <p style={{ margin: '16px 0 18px', color: '#475569', lineHeight: 1.5 }}>{showShipConfirmModal.message}</p>
+                <div className="form-group" style={{ marginBottom: '24px' }}>
+                  <label className="form-label">Data/ora scarico</label>
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={shipDateTime}
+                    onChange={(e) => setShipDateTime(e.target.value)}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowShipConfirmModal(null)}>
+                    <X size={16} /> No
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      executeShipArticolo(showShipConfirmModal.articolo, getShipEventTimestamp());
+                      setShowShipConfirmModal(null);
+                    }}
+                  >
+                    <Check size={16} /> Si, procedi
                   </button>
                 </div>
               </div>
