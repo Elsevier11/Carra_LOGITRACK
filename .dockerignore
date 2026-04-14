@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+server/node_modules
+dist
+release
+*.log
+*.zip
+*.db-shm
+*.db-wal
+server/vasche.db
+manuale_docx_src
+*.docx
+*.pdf

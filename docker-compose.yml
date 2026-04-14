@@ -1,0 +1,29 @@
+services:
+  carra-logitrack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: carra-logitrack
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      LOGITRACK_SESSION_SECRET: ${LOGITRACK_SESSION_SECRET}
+      LOGITRACK_COOKIE_SAMESITE: lax
+      LOGITRACK_COOKIE_SECURE: "false"
+    volumes:
+      - ./server/vasche.db:/app/server/vasche.db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http=require('http');http.get('http://127.0.0.1:3001/api/health',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1));"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
