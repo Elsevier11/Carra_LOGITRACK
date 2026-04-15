@@ -5,7 +5,7 @@ Questa configurazione pubblica frontend e backend nello stesso servizio Render.
 ## 1) Prerequisiti
 
 - Branch aggiornato su GitHub.
-- File dati `server/vasche.db` presente nel branch da consegnare.
+- Repository con solo codice applicativo (nessun dato cliente versionato).
 
 ## 2) Crea il servizio Render unico
 
@@ -30,4 +30,5 @@ Questa configurazione pubblica frontend e backend nello stesso servizio Render.
 - Con deploy unificato non serve `VITE_API_BASE_URL`.
 - Se lasci Vercel attivo, disabilita i deploy o scollega il progetto per evitare confusione.
 - Su piano free il servizio puo andare in sleep; il primo accesso puo essere lento.
+- Il primo avvio crea automaticamente un DB SQLite vuoto (schema + utenti di default); il cliente carica poi vasche e solette.
 - SQLite su filesystem del container non e una persistenza robusta per produzione: per consegna cliente valuta almeno backup periodico del file `server/vasche.db` o un DB gestito.

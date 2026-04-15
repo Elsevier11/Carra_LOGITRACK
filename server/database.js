@@ -3,7 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const { hashPassword, isPasswordHash } = require('./auth');
 
-const dbPath = path.resolve(__dirname, 'vasche.db');
+const dbPath = process.env.LOGITRACK_DB_PATH
+    ? path.resolve(process.env.LOGITRACK_DB_PATH)
+    : path.resolve(__dirname, 'vasche.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Errore durante la connessione al database SQLite:', err.message);

@@ -11,10 +11,11 @@ services:
       NODE_ENV: production
       PORT: 3001
       LOGITRACK_SESSION_SECRET: ${LOGITRACK_SESSION_SECRET}
+      LOGITRACK_DB_PATH: /app/runtime-data/vasche.db
       LOGITRACK_COOKIE_SAMESITE: lax
       LOGITRACK_COOKIE_SECURE: "false"
     volumes:
-      - ./server/vasche.db:/app/server/vasche.db
+      - ./runtime-data:/app/runtime-data
     healthcheck:
       test:
         [
