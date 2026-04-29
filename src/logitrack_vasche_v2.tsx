@@ -40,6 +40,7 @@ const getEmptyCreateFormData = () => ({
   lunghezzaSolettaCm: '',
   altezzaSolettaCm: ''
 });
+const ADJACENT_GAP_CM = 10;
 
 /**
  * MAIN COMPONENT
@@ -78,6 +79,12 @@ const LogiTrackVasche = () => {
   const [showConfirmModal, setShowConfirmModal] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [showShipConfirmModal, setShowShipConfirmModal] = useState<{ message: string; articolo: Articolo } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState<{ title?: string; message: string } | null>(null);
+  const [adjacentPlacementPrompt, setAdjacentPlacementPrompt] = useState<{
+    targetCodice: string;
+    fila: string;
+    leftOffset: number | null;
+    rightOffset: number | null;
+  } | null>(null);
   const [mode, setMode] = useState<'view' | 'position' | 'move'>('view');
   const [ghostPosition, setGhostPosition] = useState<string | null>(null);
   const [hoveredArticolo, setHoveredArticolo] = useState<Articolo | null>(null);
@@ -327,9 +334,33 @@ const LogiTrackVasche = () => {
   }, [canDeleteSelectedArticolo, selectedArticolo]);
   const handleArticoloClick = useCallback((event: React.MouseEvent, articolo: Articolo) => {
     if (mode !== 'view') {
-      // Durante posizionamento/spostamento non cambiare articolo:
-      // il click su altri blocchi deve cadere sulla fila sottostante.
-      if (selectedArticolo && articolo.id !== selectedArticolo.id) {
+      if (
+        selectedArticolo &&
+        articolo.id !== selectedArticolo.id &&
+        selectedArticolo.tipo === 'VASCA' &&
+        articolo.tipo === 'VASCA' &&
+        articolo.stato === 'IN_AREA' &&
+        articolo.fila &&
+        articolo.offsetInizio !== null
+      ) {
+        event.stopPropagation();
+        const excludeId = mode === 'move' ? selectedArticolo.id : null;
+        const rightOffset = articolo.offsetInizio + articolo.lunghezza + ADJACENT_GAP_CM;
+        const leftOffset = articolo.offsetInizio - selectedArticolo.lunghezza - ADJACENT_GAP_CM;
+        const rightCheck = isPositionAvailable(articolo.fila, rightOffset, selectedArticolo.lunghezza, excludeId, selectedArticolo.tipo);
+        const leftCheck = isPositionAvailable(articolo.fila, leftOffset, selectedArticolo.lunghezza, excludeId, selectedArticolo.tipo);
+        const hasRight = rightCheck.available;
+        const hasLeft = leftCheck.available;
+        if (!hasLeft && !hasRight) {
+          showToast(`Nessuno spazio disponibile per affiancare ${selectedArticolo.codice} a ${articolo.codice} con gap ${ADJACENT_GAP_CM}cm`, 'error');
+          return;
+        }
+        setAdjacentPlacementPrompt({
+          targetCodice: articolo.codice,
+          fila: articolo.fila,
+          leftOffset: hasLeft ? leftOffset : null,
+          rightOffset: hasRight ? rightOffset : null
+        });
         return;
       }
       event.stopPropagation();
@@ -345,7 +376,7 @@ const LogiTrackVasche = () => {
       return;
     }
     setSelectedArticolo(articolo);
-  }, [canSelectArticolo, mode, selectedArticolo]);
+  }, [canSelectArticolo, isPositionAvailable, mode, selectedArticolo, showToast]);
   const startEditArticolo = useCallback((articolo: Articolo) => {
     setShowConfirmModal({
       message: `Vuoi modificare i dati di ${articolo.codice}?`,
@@ -1325,6 +1356,18 @@ const LogiTrackVasche = () => {
     const posLabel = selectedArticolo.tipo === 'SOLETTA' ? `Pila ${fila} (L${nextLevel})` : `${Math.round(offset)}cm`;
     moveArticolo(selectedArticolo.id, fila, offset, 'IN_AREA', 'MOVIMENTAZIONE', `Spostata in ${fila} @ ${posLabel}`, nextLevel);
   };
+  const handleAdjacentPlacementChoice = useCallback((side: 'left' | 'right') => {
+    if (!adjacentPlacementPrompt) return;
+    const offset = side === 'left' ? adjacentPlacementPrompt.leftOffset : adjacentPlacementPrompt.rightOffset;
+    if (offset === null) {
+      showToast('Posizione non disponibile', 'error');
+      return;
+    }
+    setGhostPosition(`${adjacentPlacementPrompt.fila}:${offset}`);
+    setAdjacentPlacementPrompt(null);
+    if (mode === 'position') commitPositionArticolo(adjacentPlacementPrompt.fila, offset);
+    if (mode === 'move') commitMoveArticolo(adjacentPlacementPrompt.fila, offset);
+  }, [adjacentPlacementPrompt, commitMoveArticolo, commitPositionArticolo, mode, showToast]);
 
   const handleTrackTap = useCallback((fila: string, rawOffset: number, pointerType: 'mouse' | 'touch') => {
     if (!selectedArticolo || mode === 'view') return;
@@ -2825,6 +2868,40 @@ const LogiTrackVasche = () => {
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowConfirmModal(null)}><X size={16} /> No</button>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={showConfirmModal.onConfirm}><Check size={16} /> Si, procedi</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {adjacentPlacementPrompt && (
+            <div className="modal-overlay" onClick={() => setAdjacentPlacementPrompt(null)}>
+              <div className="modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+                <h2 style={{ fontSize: '20px' }}>Affiancamento guidato</h2>
+                <p style={{ margin: '14px 0 20px', color: '#475569', lineHeight: 1.5 }}>
+                  Vuoi posizionare l&apos;articolo selezionato a fianco di <strong>{adjacentPlacementPrompt.targetCodice}</strong> con gap {ADJACENT_GAP_CM}cm?
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={adjacentPlacementPrompt.leftOffset === null}
+                    onClick={() => handleAdjacentPlacementChoice('left')}
+                    title={adjacentPlacementPrompt.leftOffset === null ? 'Spazio non disponibile a sinistra' : ''}
+                  >
+                    Affianca a sinistra
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={adjacentPlacementPrompt.rightOffset === null}
+                    onClick={() => handleAdjacentPlacementChoice('right')}
+                    title={adjacentPlacementPrompt.rightOffset === null ? 'Spazio non disponibile a destra' : ''}
+                  >
+                    Affianca a destra
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+                  <button className="btn btn-primary" onClick={() => setAdjacentPlacementPrompt(null)}>
+                    Annulla
+                  </button>
                 </div>
               </div>
             </div>
