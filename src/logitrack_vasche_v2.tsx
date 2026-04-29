@@ -94,6 +94,7 @@ const LogiTrackVasche = () => {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [isSelectionExpanded, setIsSelectionExpanded] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [stagedPlacement, setStagedPlacement] = useState<{ fila: string; offset: number } | null>(null);
   const flowTargetId = solettaRelocationFlow?.target.id;
   const flowCurrentBlockerId = solettaRelocationFlow?.blockers[solettaRelocationFlow.currentIndex]?.id;
   const flowBlockerIds = new Set<string>();
@@ -488,6 +489,12 @@ const LogiTrackVasche = () => {
     }
   }, [canSelectArticolo, mode, selectedArticolo]);
 
+  useEffect(() => {
+    if (mode === 'view' || !selectedArticolo) {
+      setStagedPlacement(null);
+    }
+  }, [mode, selectedArticolo]);
+
   const fetchUtenti = async () => {
     try {
       const res = await apiFetch('/api/utenti');
@@ -690,6 +697,30 @@ const LogiTrackVasche = () => {
 
     return { available: true, nextLevel: topLevel + 1 };
   }, [articoli, currentGridConfig, getFilaLength]);
+
+  const getMagneticOffset = useCallback((fila: string, offset: number, lunghezza: number, excludeId: string | null = null, tipo: Articolo['tipo'] = 'VASCA') => {
+    if (tipo !== 'VASCA') return offset;
+
+    const SNAP_CM = 10;
+    const candidates: number[] = [offset];
+    articoli.forEach((v) => {
+      if (v.id === excludeId || v.stato !== 'IN_AREA' || v.fila !== fila || v.offsetInizio === null || v.tipo !== 'VASCA') return;
+      candidates.push(v.offsetInizio - lunghezza);
+      candidates.push(v.offsetInizio + v.lunghezza);
+    });
+
+    let best = offset;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    candidates.forEach((candidate) => {
+      const rounded = Math.round(candidate);
+      const distance = Math.abs(rounded - offset);
+      if (distance <= SNAP_CM && distance < bestDistance) {
+        bestDistance = distance;
+        best = rounded;
+      }
+    });
+    return best;
+  }, [articoli]);
 
   // --- Computed Data ---
   const activeArticoli = useMemo(() => {
@@ -1220,6 +1251,18 @@ const LogiTrackVasche = () => {
     });
   };
 
+  const commitPositionArticolo = (fila: string, offset: number) => {
+    if (!selectedArticolo || mode !== 'position') return;
+    const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, null, selectedArticolo.tipo);
+    if (!check.available) {
+      showToast(`Posizione non valida: ${check.reason}`, 'error');
+      return;
+    }
+    const nextLevel = (check as any).nextLevel || 1;
+    const posLabel = selectedArticolo.tipo === 'SOLETTA' ? `Pila ${fila} (L${nextLevel})` : `${Math.round(offset)}cm`;
+    moveArticolo(selectedArticolo.id, fila, offset, 'IN_AREA', 'ENTRATA', `Posizionata in ${fila} @ ${posLabel}`, nextLevel);
+  };
+
   const handleMoveArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'move') return;
     if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
@@ -1258,6 +1301,42 @@ const LogiTrackVasche = () => {
       }
     });
   };
+
+  const commitMoveArticolo = (fila: string, offset: number) => {
+    if (!selectedArticolo || mode !== 'move') return;
+    if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
+      showToast('Solo le solette in cima alla pila possono essere spostate.', 'error');
+      return;
+    }
+    const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
+    if (!check.available) {
+      showToast(`Posizione non valida: ${check.reason}`, 'error');
+      return;
+    }
+    const nextLevel = (check as any).nextLevel || 1;
+    const posLabel = selectedArticolo.tipo === 'SOLETTA' ? `Pila ${fila} (L${nextLevel})` : `${Math.round(offset)}cm`;
+    moveArticolo(selectedArticolo.id, fila, offset, 'IN_AREA', 'MOVIMENTAZIONE', `Spostata in ${fila} @ ${posLabel}`, nextLevel);
+  };
+
+  const handleTrackTap = useCallback((fila: string, rawOffset: number, pointerType: 'mouse' | 'touch') => {
+    if (!selectedArticolo || mode === 'view') return;
+    const snappedOffset = getMagneticOffset(fila, rawOffset, selectedArticolo.lunghezza, mode === 'move' ? selectedArticolo.id : null, selectedArticolo.tipo);
+    setGhostPosition(`${fila}:${snappedOffset}`);
+
+    if (pointerType === 'touch' && isTabletLayout) {
+      if (stagedPlacement && stagedPlacement.fila === fila && Math.abs(stagedPlacement.offset - snappedOffset) <= 10) {
+        if (mode === 'position') commitPositionArticolo(fila, snappedOffset);
+        if (mode === 'move') commitMoveArticolo(fila, snappedOffset);
+        setStagedPlacement(null);
+        return;
+      }
+      setStagedPlacement({ fila, offset: snappedOffset });
+      return;
+    }
+
+    if (mode === 'position') handlePositionArticolo(fila, snappedOffset);
+    if (mode === 'move') handleMoveArticolo(fila, snappedOffset);
+  }, [selectedArticolo, mode, getMagneticOffset, isTabletLayout, stagedPlacement]);
 
   const getSolettaBlockers = (target: Articolo) => {
     return articoli
@@ -1536,13 +1615,13 @@ const LogiTrackVasche = () => {
         .mode-badge { margin-left: auto; font-size: 12px; font-weight: 700; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; }
         
         /* Linear Layout (Timeline) */
-        .content { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; }
+        .content { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; position: relative; isolation: isolate; }
         .content.grid-focus { min-height: calc(100vh - 190px); align-items: stretch; }
         .content.grid-focus .grid-section { display: flex; flex-direction: column; min-height: 0; }
         .content.grid-focus .grid-container { flex: 1; min-height: 0; overflow: auto; }
         .content.grid-focus .sidebar { display: flex; flex-direction: column; min-height: 0; }
         .content.grid-focus .vasca-list { flex: 1; min-height: 0; max-height: none; }
-          .grid-section { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); }
+          .grid-section { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); min-width: 0; position: relative; z-index: 1; }
           .grid-container { overflow-x: auto; padding: 4px; }
           .relocation-banner {
             grid-column: span 2;
@@ -1620,7 +1699,7 @@ const LogiTrackVasche = () => {
         }
         
         /* Sidebar */
-        .sidebar { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); border: 1px solid #e2e8f0; position: sticky; top: 10px; }
+        .sidebar { background: white; padding: 14px; border-radius: 18px; box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35); border: 1px solid #e2e8f0; position: sticky; top: 10px; z-index: 5; }
         .vasca-list { max-height: 600px; overflow-y: auto; padding-right: 6px; }
         .selection-card { position: sticky; top: 0; z-index: 6; background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%); border: 1px solid #bfdbfe; border-radius: 14px; padding: 12px; margin-bottom: 12px; box-shadow: 0 12px 24px -24px rgba(37,99,235,0.45); }
         .selection-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -1947,13 +2026,18 @@ const LogiTrackVasche = () => {
                       </div>
                     {isTabletLayout && selectedArticolo?.tipo !== 'SOLETTA' && (
                       <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-                        Suggerimento tablet: il posizionamento con tocco viene arrotondato a step da 10cm.
+                        Suggerimento tablet: primo tocco imposta anteprima, secondo tocco nella stessa zona conferma (snap magnetico 10cm).
+                      </div>
+                    )}
+                    {isTabletLayout && mode !== 'view' && stagedPlacement && (
+                      <div style={{ fontSize: '12px', color: '#1d4ed8', marginTop: '6px', fontWeight: 700 }}>
+                        Anteprima attiva: fila {stagedPlacement.fila}{selectedArticolo?.tipo === 'SOLETTA' ? '' : ` @ ${Math.round(stagedPlacement.offset)}cm`}
                       </div>
                     )}
                     <button
                       className="btn btn-secondary"
                       style={{ marginTop: '12px', padding: '8px 16px', fontSize: '13px' }}
-                      onClick={() => { setMode('view'); setSelectedArticolo(null); setGhostPosition(null); }}
+                      onClick={() => { setMode('view'); setSelectedArticolo(null); setGhostPosition(null); setStagedPlacement(null); }}
                     >
                       <X size={14} /> Annulla
                     </button>
@@ -2007,17 +2091,16 @@ const LogiTrackVasche = () => {
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   const y = e.clientY - rect.bottom;
                                   const offset = Math.round(Math.abs(y) / currentGridConfig.pixelsPerMeter);
-                                  if (mode === 'position') handlePositionArticolo(fila, offset);
-                                  if (mode === 'move') handleMoveArticolo(fila, offset);
+                                  handleTrackTap(fila, offset, 'mouse');
                                 }}
                                 onPointerDown={(e: any) => {
                                   if (e.pointerType === 'mouse') return;
+                                  e.preventDefault();
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   const y = e.clientY - rect.bottom;
                                   const rawOffset = Math.round(Math.abs(y) / currentGridConfig.pixelsPerMeter);
                                   const offset = Math.round(rawOffset / 10) * 10;
-                                  if (mode === 'position') handlePositionArticolo(fila, offset);
-                                  if (mode === 'move') handleMoveArticolo(fila, offset);
+                                  handleTrackTap(fila, offset, 'touch');
                                 }}
                                 onMouseMove={(e: any) => {
                                   if (mode === 'view') return;
@@ -2114,13 +2197,12 @@ const LogiTrackVasche = () => {
                                               position: 'relative'
                                             }}
                                             onClick={() => {
-                                              if (mode === 'position') handlePositionArticolo(pile, 0);
-                                              if (mode === 'move') handleMoveArticolo(pile, 0);
+                                              handleTrackTap(pile, 0, 'mouse');
                                             }}
                                             onPointerDown={(e: any) => {
                                               if (e.pointerType === 'mouse') return;
-                                              if (mode === 'position') handlePositionArticolo(pile, 0);
-                                              if (mode === 'move') handleMoveArticolo(pile, 0);
+                                              e.preventDefault();
+                                              handleTrackTap(pile, 0, 'touch');
                                             }}
                                             onMouseMove={() => {
                                               if (mode === 'view') return;
@@ -2205,16 +2287,15 @@ const LogiTrackVasche = () => {
                                       const rect = e.currentTarget.getBoundingClientRect();
                                       const x = e.clientX - rect.left;
                                       const offset = computeOffsetFromPointer(fila, x, rect.width);
-                                      if (mode === 'position') handlePositionArticolo(fila, offset);
-                                      if (mode === 'move') handleMoveArticolo(fila, offset);
+                                      handleTrackTap(fila, offset, 'mouse');
                                     }}
                                     onPointerDown={(e: any) => {
                                       if (e.pointerType === 'mouse') return;
+                                      e.preventDefault();
                                       const rect = e.currentTarget.getBoundingClientRect();
                                       const x = e.clientX - rect.left;
                                       const offset = computeOffsetFromPointer(fila, x, rect.width, true);
-                                      if (mode === 'position') handlePositionArticolo(fila, offset);
-                                      if (mode === 'move') handleMoveArticolo(fila, offset);
+                                      handleTrackTap(fila, offset, 'touch');
                                     }}
                                     onMouseMove={(e: any) => {
                                       if (mode === 'view') return;
