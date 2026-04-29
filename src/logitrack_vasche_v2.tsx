@@ -376,7 +376,7 @@ const LogiTrackVasche = () => {
       return;
     }
     setSelectedArticolo(articolo);
-  }, [canSelectArticolo, isPositionAvailable, mode, selectedArticolo, showToast]);
+  }, [canSelectArticolo, mode, selectedArticolo, showToast]);
   const startEditArticolo = useCallback((articolo: Articolo) => {
     setShowConfirmModal({
       message: `Vuoi modificare i dati di ${articolo.codice}?`,
