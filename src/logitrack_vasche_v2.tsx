@@ -34,6 +34,7 @@ const getEmptyCreateFormData = () => ({
   codice: '',
   cliente: '',
   commessa: '',
+  note: '',
   lunghezza: '',
   altezzaVascaCm: '',
   lunghezzaSolettaCm: '',
@@ -69,6 +70,7 @@ const LogiTrackVasche = () => {
     codice: '',
     cliente: '',
     commessa: '',
+    note: '',
     altezzaVascaCm: '',
     lunghezzaSolettaCm: '',
     altezzaSolettaCm: ''
@@ -354,6 +356,7 @@ const LogiTrackVasche = () => {
           codice: articolo.codice,
           cliente: articolo.cliente,
           commessa: articolo.commessa,
+          note: articolo.note || '',
           altezzaVascaCm: articolo.altezzaVascaCm ? String(articolo.altezzaVascaCm) : '',
           lunghezzaSolettaCm: articolo.lunghezzaSolettaCm ? String(articolo.lunghezzaSolettaCm) : '',
           altezzaSolettaCm: articolo.altezzaSolettaCm ? String(articolo.altezzaSolettaCm) : ''
@@ -380,6 +383,7 @@ const LogiTrackVasche = () => {
       codice: articolo.codice,
       cliente: articolo.cliente,
       commessa: articolo.commessa,
+      note: articolo.note || '',
       lunghezza: articolo.tipo === 'VASCA' ? String(articolo.lunghezza) : '',
       altezzaVascaCm: articolo.altezzaVascaCm ? String(articolo.altezzaVascaCm) : '',
       lunghezzaSolettaCm: articolo.tipo === 'SOLETTA'
@@ -907,7 +911,7 @@ const LogiTrackVasche = () => {
 
   // --- Handlers ---
   const handleCreateArticolo = async () => {
-    const { codice, cliente, commessa, lunghezza, altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm } = formData;
+    const { codice, cliente, commessa, note, lunghezza, altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm } = formData;
     const isSoletta = currentCategory === 'SOLETTA';
     if (!codice || !cliente || !commessa || (!isSoletta && !lunghezza)) {
       showToast('Compila tutti i campi obbligatori', 'error');
@@ -944,6 +948,7 @@ const LogiTrackVasche = () => {
         codice,
         cliente,
         commessa,
+        note: note.trim() || null,
         lunghezza: numLunghezza,
         posizione: null,
         fila: null,
@@ -966,6 +971,7 @@ const LogiTrackVasche = () => {
           codice: newArticolo.codice,
           cliente: newArticolo.cliente,
           commessa: newArticolo.commessa,
+          note: newArticolo.note,
           lunghezza: newArticolo.lunghezza,
           colore: newArticolo.colore,
           stato: newArticolo.stato,
@@ -1011,6 +1017,7 @@ const LogiTrackVasche = () => {
     const codice = editFormData.codice.trim();
     const cliente = editFormData.cliente.trim();
     const commessa = editFormData.commessa.trim();
+    const note = editFormData.note.trim();
     const altezzaVascaCm = editFormData.altezzaVascaCm ? Number(editFormData.altezzaVascaCm) : null;
     const lunghezzaSolettaCm = editFormData.lunghezzaSolettaCm ? Number(editFormData.lunghezzaSolettaCm) : null;
     const altezzaSolettaCm = editFormData.altezzaSolettaCm ? Number(editFormData.altezzaSolettaCm) : null;
@@ -1042,7 +1049,7 @@ const LogiTrackVasche = () => {
       const res = await apiFetch(`/api/articoli/${editingArticoloId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codice, cliente, commessa, altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm })
+        body: JSON.stringify({ codice, cliente, commessa, note: note || null, altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm })
       });
 
       if (!res.ok) {
@@ -1056,6 +1063,7 @@ const LogiTrackVasche = () => {
         codice,
         cliente,
         commessa,
+        note: note || null,
         altezzaVascaCm,
         lunghezzaSolettaCm,
         altezzaSolettaCm
@@ -1065,7 +1073,7 @@ const LogiTrackVasche = () => {
       setSelectedArticolo(prev => (prev && prev.id === editingArticoloId ? updatedArticolo : prev));
       setShowEditModal(false);
       setEditingArticoloId(null);
-      setEditFormData({ codice: '', cliente: '', commessa: '', altezzaVascaCm: '', lunghezzaSolettaCm: '', altezzaSolettaCm: '' });
+      setEditFormData({ codice: '', cliente: '', commessa: '', note: '', altezzaVascaCm: '', lunghezzaSolettaCm: '', altezzaSolettaCm: '' });
       showToast('Modifica salvata', 'success');
     } catch (err) {
       console.error('Errore nel salvataggio modifica articolo:', err);
@@ -2482,6 +2490,16 @@ const LogiTrackVasche = () => {
                     onChange={e => setEditFormData({ ...editFormData, commessa: e.target.value })}
                   />
                 </div>
+                <div className="form-group" style={{ marginTop: '12px' }}>
+                  <label className="form-label">Note</label>
+                  <textarea
+                    className="form-input"
+                    value={editFormData.note}
+                    onChange={e => setEditFormData({ ...editFormData, note: e.target.value })}
+                    rows={3}
+                    placeholder="Note opzionali"
+                  />
+                </div>
                 {selectedArticolo?.tipo === 'VASCA' ? (
                   <div className="form-group" style={{ marginTop: '12px' }}>
                     <label className="form-label">Altezza vasca (cm)</label>
@@ -2561,9 +2579,19 @@ const LogiTrackVasche = () => {
                         <label className="form-label">Cliente</label>
                         <input className="form-input" value={formData.cliente} onChange={e => setFormData({ ...formData, cliente: e.target.value })} placeholder="Es. AGZ APPALTI" />
                       </div>
-                      <div className="form-group">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Commessa</label>
                         <input className="form-input" value={formData.commessa} onChange={e => setFormData({ ...formData, commessa: e.target.value })} placeholder="Es. R2213/25" />
+                      </div>
+                      <div className="form-group" style={{ marginTop: '12px', marginBottom: 0 }}>
+                        <label className="form-label">Note</label>
+                        <textarea
+                          className="form-input"
+                          value={formData.note}
+                          onChange={e => setFormData({ ...formData, note: e.target.value })}
+                          rows={3}
+                          placeholder="Note opzionali"
+                        />
                       </div>
                     </div>
 

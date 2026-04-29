@@ -15,6 +15,12 @@ export const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: numbe
       <span className="tooltip-label">Commessa:</span>
       <span className="tooltip-value">{vasca.commessa}</span>
     </div>
+    {vasca.note && (
+      <div className="tooltip-row">
+        <span className="tooltip-label">Note:</span>
+        <span className="tooltip-value">{vasca.note}</span>
+      </div>
+    )}
     {vasca.tipo !== 'SOLETTA' && (
       <div className="tooltip-row">
         <span className="tooltip-label">Lunghezza:</span>

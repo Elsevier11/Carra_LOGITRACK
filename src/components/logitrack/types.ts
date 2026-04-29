@@ -3,6 +3,7 @@ export interface Articolo {
   codice: string;
   cliente: string;
   commessa: string;
+  note?: string | null;
   lunghezza: number;
   altezzaVascaCm?: number | null;
   lunghezzaSolettaCm?: number | null;

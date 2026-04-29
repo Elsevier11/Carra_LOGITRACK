@@ -5,6 +5,7 @@ interface Articolo {
   codice: string;
   cliente: string;
   commessa: string;
+  note?: string | null;
   lunghezza: number;
   altezzaVascaCm?: number | null;
   lunghezzaSolettaCm?: number | null;
@@ -61,6 +62,7 @@ export default function InventoryCard({
       <div className="vasca-info">
         <div><strong>Cliente:</strong> {articolo.cliente}</div>
         <div><strong>Commessa:</strong> {articolo.commessa}</div>
+        {!showCompactCardInfo && articolo.note && <div><strong>Note:</strong> {articolo.note}</div>}
         {!showCompactCardInfo && articolo.tipo !== 'SOLETTA' && (
           <div><strong>Lunghezza:</strong> {articolo.lunghezza}cm</div>
         )}

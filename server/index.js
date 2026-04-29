@@ -99,6 +99,11 @@ function normalizeNullableString(value) {
     if (value === undefined || value === null || value === '') return null;
     return String(value);
 }
+function normalizeNullableTrimmedString(value) {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
 
 function sendValidationError(res, message) {
     return res.status(400).json({ error: message });
@@ -228,6 +233,7 @@ app.get('/api/articoli', requireAuth, (_req, res) => {
             codice: row.codice,
             cliente: row.cliente,
             commessa: row.commessa,
+            note: row.note,
             lunghezza: row.lunghezza,
             posizione: row.posizione,
             fila: row.fila,
@@ -247,7 +253,7 @@ app.get('/api/articoli', requireAuth, (_req, res) => {
 app.post('/api/articoli', requireAuth, (req, res) => {
     const {
         id, codice, cliente, commessa, lunghezza, colore, stato, dataCreazione, fila, offsetInizio, tipo, livello,
-        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm
+        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm, note
     } = req.body;
     const normalizedType = SUPPORTED_ARTICLE_TYPES.has(tipo) ? tipo : 'VASCA';
     const normalizedState = SUPPORTED_ARTICLE_STATES.has(stato) ? stato : 'CREATA';
@@ -274,8 +280,8 @@ app.post('/api/articoli', requireAuth, (req, res) => {
 
     const sql = `INSERT INTO articoli (
         id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio, tipo, livello, colore, stato, data_creazione,
-        altezza_vasca_cm, lunghezza_soletta_cm, altezza_soletta_cm
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        altezza_vasca_cm, lunghezza_soletta_cm, altezza_soletta_cm, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [
         id,
         codice.trim(),
@@ -292,7 +298,8 @@ app.post('/api/articoli', requireAuth, (req, res) => {
         dataCreazione,
         normalizedType === 'VASCA' ? (altezzaVascaCm ?? null) : null,
         normalizedType === 'SOLETTA' ? (lunghezzaSolettaCm ?? lunghezza) : null,
-        normalizedType === 'SOLETTA' ? (altezzaSolettaCm ?? null) : null
+        normalizedType === 'SOLETTA' ? (altezzaSolettaCm ?? null) : null,
+        normalizeNullableTrimmedString(note)
     ];
 
     db.run(sql, params, function (insertErr) {
@@ -307,13 +314,13 @@ app.put('/api/articoli/:id', requireAuth, (req, res) => {
     const { id } = req.params;
     const {
         posizione, fila, offsetInizio, stato, livello, codice, cliente, commessa,
-        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm
+        altezzaVascaCm, lunghezzaSolettaCm, altezzaSolettaCm, note
     } = req.body;
     const metadataPatch = {};
     const hasStatePatch = posizione !== undefined || fila !== undefined || offsetInizio !== undefined || stato !== undefined || livello !== undefined;
     const hasMetadataPatch =
         codice !== undefined || cliente !== undefined || commessa !== undefined ||
-        altezzaVascaCm !== undefined || lunghezzaSolettaCm !== undefined || altezzaSolettaCm !== undefined;
+        altezzaVascaCm !== undefined || lunghezzaSolettaCm !== undefined || altezzaSolettaCm !== undefined || note !== undefined;
 
     if (stato !== undefined && !SUPPORTED_ARTICLE_STATES.has(stato)) {
         return sendValidationError(res, 'Stato non valido');
@@ -347,6 +354,9 @@ app.put('/api/articoli/:id', requireAuth, (req, res) => {
     if (altezzaSolettaCm !== undefined) {
         if (altezzaSolettaCm !== null && (!Number.isInteger(altezzaSolettaCm) || altezzaSolettaCm <= 0)) return sendValidationError(res, 'Altezza soletta non valida');
         metadataPatch.altezza_soletta_cm = altezzaSolettaCm;
+    }
+    if (note !== undefined) {
+        metadataPatch.note = normalizeNullableTrimmedString(note);
     }
 
     if (!hasStatePatch && !hasMetadataPatch) {

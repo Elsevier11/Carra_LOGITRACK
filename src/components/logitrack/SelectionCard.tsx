@@ -5,6 +5,7 @@ interface Articolo {
   codice: string;
   cliente: string;
   commessa: string;
+  note?: string | null;
   lunghezza: number;
   altezzaVascaCm?: number | null;
   lunghezzaSolettaCm?: number | null;
@@ -70,6 +71,7 @@ export default function SelectionCard({
           <div className="selection-card-grid">
             <div><strong>Cliente:</strong> {selectedArticolo.cliente}</div>
             <div><strong>Commessa:</strong> {selectedArticolo.commessa}</div>
+            {selectedArticolo.note && <div><strong>Note:</strong> {selectedArticolo.note}</div>}
             {selectedArticolo.tipo !== 'SOLETTA' && (
               <div><strong>Lunghezza:</strong> {selectedArticolo.lunghezza}cm</div>
             )}

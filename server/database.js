@@ -94,6 +94,7 @@ async function migrationNormalizeAndConvertToCm() {
           codice TEXT NOT NULL,
           cliente TEXT NOT NULL,
           commessa TEXT NOT NULL,
+          note TEXT,
           lunghezza INTEGER NOT NULL,
           posizione TEXT,
           fila TEXT,
@@ -117,7 +118,6 @@ async function migrationNormalizeAndConvertToCm() {
     const hasAltezzaVasca = info.some((c) => c.name === 'altezza_vasca_cm');
     const hasLunghezzaSoletta = info.some((c) => c.name === 'lunghezza_soletta_cm');
     const hasAltezzaSoletta = info.some((c) => c.name === 'altezza_soletta_cm');
-
     const shouldRebuild = hasUniqueCodice || !hasAltezzaVasca || !hasLunghezzaSoletta || !hasAltezzaSoletta;
     if (!shouldRebuild) {
         // Conversione eventuale metri -> cm su installazioni gia' migrate a livello schema.
@@ -148,6 +148,7 @@ async function migrationNormalizeAndConvertToCm() {
       codice TEXT NOT NULL,
       cliente TEXT NOT NULL,
       commessa TEXT NOT NULL,
+      note TEXT,
       lunghezza INTEGER NOT NULL,
       posizione TEXT,
       fila TEXT,
@@ -164,7 +165,7 @@ async function migrationNormalizeAndConvertToCm() {
 
     await runAsync(
         `INSERT INTO articoli_new (
-            id, codice, cliente, commessa, lunghezza, posizione, fila, offset_inizio,
+            id, codice, cliente, commessa, note, lunghezza, posizione, fila, offset_inizio,
             tipo, livello, colore, stato, data_creazione, altezza_vasca_cm,
             lunghezza_soletta_cm, altezza_soletta_cm
         )
@@ -173,6 +174,7 @@ async function migrationNormalizeAndConvertToCm() {
             codice,
             cliente,
             commessa,
+            note,
             CAST(ROUND(COALESCE(lunghezza, 0) * ?) AS INTEGER) AS lunghezza_cm,
             posizione,
             fila,
@@ -207,6 +209,15 @@ async function migrationNormalizeAndConvertToCm() {
              ELSE posizione
          END`
     );
+}
+
+async function migrationAddArticoloNote() {
+    if (!await tableExists('articoli')) return;
+    const info = await allAsync('PRAGMA table_info(articoli)');
+    const hasNote = info.some((c) => c.name === 'note');
+    if (!hasNote) {
+        await runAsync('ALTER TABLE articoli ADD COLUMN note TEXT');
+    }
 }
 
 async function migrationRegistroDualDates() {
@@ -279,7 +290,8 @@ async function migrateLegacyPasswords() {
 async function runMigrations() {
     const migrations = [
         { id: '2026-04-09-001-articoli-cm', up: migrationNormalizeAndConvertToCm },
-        { id: '2026-04-09-002-registro-dual-dates', up: migrationRegistroDualDates }
+        { id: '2026-04-09-002-registro-dual-dates', up: migrationRegistroDualDates },
+        { id: '2026-04-29-003-articoli-note', up: migrationAddArticoloNote }
     ];
 
     const pending = await getPendingMigrations(migrations);
