@@ -527,7 +527,10 @@ app.delete('/api/articoli/:id', requireAuth, (req, res) => {
 // --- API REGISTRO ---
 
 app.get('/api/registro', requireAuth, (_req, res) => {
-    db.all('SELECT * FROM registro ORDER BY recorded_at DESC', [], (err, rows) => {
+    db.all(`SELECT r.*, a.cliente AS articolo_cliente, a.commessa AS articolo_commessa
+            FROM registro r
+            LEFT JOIN articoli a ON a.id = r.vasca_id
+            ORDER BY r.recorded_at DESC`, [], (err, rows) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -538,6 +541,8 @@ app.get('/api/registro', requireAuth, (_req, res) => {
             vascaId: row.vasca_id,
             vascaCodice: row.vasca_codice,
             vascaColore: row.vasca_colore,
+            cliente: row.articolo_cliente || null,
+            commessa: row.articolo_commessa || null,
             dettagli: row.dettagli,
             utenteNome: row.utente_nome,
             timestamp: row.recorded_at || row.timestamp,

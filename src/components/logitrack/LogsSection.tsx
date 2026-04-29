@@ -6,6 +6,8 @@ interface LogEntry {
   tipo: string;
   vascaCodice: string;
   vascaColore: string;
+  cliente?: string | null;
+  commessa?: string | null;
   dettagli: string;
   utenteNome?: string;
   timestamp: number;
@@ -64,6 +66,18 @@ export default function LogsSection({
                   {sortConfig.key === 'vascaCodice' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                 </div>
               </th>
+              <th onClick={() => requestSort('commessa')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  Commessa
+                  {sortConfig.key === 'commessa' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                </div>
+              </th>
+              <th onClick={() => requestSort('cliente')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  Cliente
+                  {sortConfig.key === 'cliente' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                </div>
+              </th>
               <th className="col-optional-tablet" onClick={() => requestSort('utenteNome')}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <User size={14} /> Operatore
@@ -80,7 +94,7 @@ export default function LogsSection({
           </thead>
           <tbody>
             {sortedRegistro.length === 0 ? (
-              <tr><td colSpan={isTabletLayout ? 4 : 6} style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Nessuna attivit√† registrata</td></tr>
+              <tr><td colSpan={isTabletLayout ? 6 : 8} style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Nessuna attivit‡ registrata</td></tr>
             ) : (
               sortedRegistro.map((log) => (
                 <tr key={log.id}>
@@ -92,6 +106,8 @@ export default function LogsSection({
                   </td>
                   <td><span className={`log-type ${String(log.tipo).toLowerCase()}`}>{log.tipo}</span></td>
                   <td style={{ fontWeight: 700 }}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: log.vascaColore }}></div>{log.vascaCodice}</div></td>
+                  <td style={{ whiteSpace: 'nowrap', color: '#475569' }}>{log.commessa || '---'}</td>
+                  <td style={{ whiteSpace: 'nowrap', color: '#475569' }}>{log.cliente || '---'}</td>
                   <td className="log-operator col-optional-tablet"><User size={12} /> {log.utenteNome || '---'}</td>
                   <td style={{ color: '#475569' }}>{log.dettagli}</td>
                 </tr>

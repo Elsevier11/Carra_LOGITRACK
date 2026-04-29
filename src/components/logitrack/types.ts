@@ -30,6 +30,8 @@ export interface LogEntry {
   vascaId?: string;
   vascaCodice: string;
   vascaColore: string;
+  cliente?: string | null;
+  commessa?: string | null;
   dettagli: string;
   utenteNome?: string;
   timestamp: number;

@@ -83,7 +83,7 @@ const LogiTrackVasche = () => {
   const [formData, setFormData] = useState(getEmptyCreateFormData);
   const [movementDateTime, setMovementDateTime] = useState(() => new Date().toISOString().slice(0, 16));
   const [shipDateTime, setShipDateTime] = useState(() => new Date().toISOString().slice(0, 16));
-  const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: keyof LogEntry | 'vascaCodice' | 'commessa' | 'cliente'; direction: 'asc' | 'desc' }>({ key: 'timestamp', direction: 'desc' });
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
@@ -822,8 +822,10 @@ const LogiTrackVasche = () => {
   const sortedRegistro = useMemo(() => {
     const sortableItems = [...registro];
     sortableItems.sort((a, b) => {
-      let aValue: any = a[sortConfig.key as keyof LogEntry];
-      let bValue: any = b[sortConfig.key as keyof LogEntry];
+      const rawA = a[sortConfig.key as keyof LogEntry];
+      const rawB = b[sortConfig.key as keyof LogEntry];
+      const aValue = rawA ?? '';
+      const bValue = rawB ?? '';
 
       if (aValue < bValue) {
         return sortConfig.direction === 'asc' ? -1 : 1;
@@ -836,7 +838,7 @@ const LogiTrackVasche = () => {
     return sortableItems;
   }, [registro, sortConfig]);
 
-  const requestSort = (key: keyof LogEntry | 'vascaCodice') => {
+  const requestSort = (key: keyof LogEntry | 'vascaCodice' | 'commessa' | 'cliente') => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -1983,7 +1985,7 @@ const LogiTrackVasche = () => {
                     if (mode === 'view') return;
                     setMousePos({ x: e.clientX, y: e.clientY });
                   }}>
-                    <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: 'flex-start', padding: '8px', flexDirection: isTabletLayout ? 'column' : 'row' }}>
+                    <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: isTabletLayout ? 'stretch' : 'flex-start', padding: '8px', flexDirection: isTabletLayout ? 'column' : 'row' }}>
                       {/* --- SEZIONE VERTICALE (V1, V2 ecc.) --- */}
                       {currentGridConfig.verticalRows && currentGridConfig.verticalRows.length > 0 && (
                         <div className="vertical-tracks-section" style={{ display: 'flex', gap: '15px' }}>
@@ -2076,7 +2078,7 @@ const LogiTrackVasche = () => {
                       )}
 
                       {/* --- SEZIONE ORIZZONTALE / SOLETTE --- */}
-                      <div className="horizontal-tracks-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div className="horizontal-tracks-section" style={{ flex: 1, width: isTabletLayout ? '100%' : 'auto', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {currentCategory === 'SOLETTA' ? (
                           (() => {
                             const rows: string[][] = [];
