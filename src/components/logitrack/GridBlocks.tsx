@@ -40,18 +40,21 @@ export const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: numbe
   </div>
 );
 
-export const ArticoloBlock = React.memo(({ 
-  articolo, 
-  isSelected, 
-  isFaded, 
-  isRecentlyMoved, 
+export const ArticoloBlock = React.memo(({
+  articolo,
+  isSelected,
+  isFaded,
+  isRecentlyMoved,
   flowClass,
   currentGridConfig,
   isScaledVascaLayout,
   filaLength,
   onClick,
   onMouseEnter,
-  onMouseLeave
+  onMouseLeave,
+  onTouchDragStart,
+  onTouchDragMove,
+  onTouchDragEnd
 }: any) => {
   const style: React.CSSProperties = {
     left: isScaledVascaLayout ? `${(((articolo.offsetInizio || 0) / filaLength) * 100)}%` : (articolo.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
@@ -75,7 +78,8 @@ export const ArticoloBlock = React.memo(({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    padding: '0 8px'
+    padding: '0 8px',
+    touchAction: onTouchDragStart ? 'none' : 'manipulation',
   };
 
   return (
@@ -85,6 +89,9 @@ export const ArticoloBlock = React.memo(({
       onClick={(e) => onClick(e, articolo)}
       onMouseEnter={() => onMouseEnter(articolo)}
       onMouseLeave={onMouseLeave}
+      onTouchStart={onTouchDragStart ? (e) => { e.preventDefault(); onTouchDragStart(); } : undefined}
+      onTouchMove={onTouchDragMove ? (e) => { e.preventDefault(); onTouchDragMove(e); } : undefined}
+      onTouchEnd={onTouchDragEnd ? (e) => { e.preventDefault(); onTouchDragEnd(); } : undefined}
     >
       {articolo.codice} {articolo.livello > 1 && `(L${articolo.livello})`}
     </div>

@@ -104,6 +104,7 @@ const LogiTrackVasche = () => {
   const [isSelectionExpanded, setIsSelectionExpanded] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [stagedPlacement, setStagedPlacement] = useState<{ fila: string; offset: number } | null>(null);
+  const [isDraggingTouch, setIsDraggingTouch] = useState(false);
   const flowTargetId = solettaRelocationFlow?.target.id;
   const flowCurrentBlockerId = solettaRelocationFlow?.blockers[solettaRelocationFlow.currentIndex]?.id;
   const flowBlockerIds = new Set<string>();
@@ -1389,6 +1390,44 @@ const LogiTrackVasche = () => {
     if (mode === 'move') handleMoveArticolo(fila, snappedOffset);
   }, [selectedArticolo, mode, getMagneticOffset, isTabletLayout, stagedPlacement]);
 
+  const touchDragGhostRef = useRef<string | null>(null);
+
+  const handleTouchDragStart = useCallback(() => {
+    if (mode !== 'move') return;
+    setIsDraggingTouch(true);
+  }, [mode]);
+
+  const handleTouchDragMove = useCallback((e: React.TouchEvent) => {
+    if (!isDraggingTouch || mode !== 'move' || !selectedArticolo) return;
+    const touch = e.touches[0];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    const trackEl = elements.find(
+      (el): el is HTMLElement => el instanceof HTMLElement && el.hasAttribute('data-fila')
+    );
+    if (!trackEl) return;
+    const fila = trackEl.getAttribute('data-fila')!;
+    const filaLen = parseFloat(trackEl.getAttribute('data-fila-length')!);
+    const rect = trackEl.getBoundingClientRect();
+    const rawOffset = ((touch.clientX - rect.left) / rect.width) * filaLen;
+    const snapped = getMagneticOffset(fila, rawOffset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
+    const pos = `${fila}:${snapped}`;
+    touchDragGhostRef.current = pos;
+    setGhostPosition(pos);
+  }, [isDraggingTouch, mode, selectedArticolo, getMagneticOffset]);
+
+  const handleTouchDragEnd = useCallback(() => {
+    if (!isDraggingTouch) return;
+    setIsDraggingTouch(false);
+    const pos = touchDragGhostRef.current;
+    touchDragGhostRef.current = null;
+    setGhostPosition(null);
+    if (!pos) return;
+    const colonIdx = pos.indexOf(':');
+    const fila = pos.slice(0, colonIdx);
+    const offset = parseFloat(pos.slice(colonIdx + 1));
+    commitMoveArticolo(fila, offset);
+  }, [isDraggingTouch, commitMoveArticolo]);
+
   const getSolettaBlockers = (target: Articolo) => {
     return articoli
       .filter(v =>
@@ -2330,6 +2369,8 @@ const LogiTrackVasche = () => {
                                   <div className="fila-label">{fila}</div>
                                   <div
                                     className="fila-track"
+                                    data-fila={fila}
+                                    data-fila-length={filaLength}
                                     style={{
                                       width: isScaledVascaLayout
                                         ? `${(filaLength / maxGridLength) * 100}%`
@@ -2383,6 +2424,9 @@ const LogiTrackVasche = () => {
                                           onClick={handleArticoloClick}
                                           onMouseEnter={setHoveredArticolo}
                                           onMouseLeave={() => setHoveredArticolo(null)}
+                                          onTouchDragStart={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragStart : undefined}
+                                          onTouchDragMove={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragMove : undefined}
+                                          onTouchDragEnd={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragEnd : undefined}
                                         />
                                       );
                                     })}
