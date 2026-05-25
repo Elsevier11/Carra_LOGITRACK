@@ -1884,7 +1884,7 @@ const LogiTrackVasche = () => {
         .tooltip-value { font-weight: 700; color: #f8fafc; }
         
         .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 99999; }
-        .modal { background: white; padding: 32px; border-radius: 18px; max-width: 500px; width: 90%; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.5); position: relative; pointer-events: auto; }
+        .modal { background: white; padding: 32px; border-radius: 18px; max-width: 500px; width: 90%; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.5); position: relative; pointer-events: auto; max-height: 90vh; overflow-y: auto; }
         .form-group { margin-bottom: 20px; }
         .form-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #64748b; }
         .form-input { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; transition: border-color 0.2s; }
