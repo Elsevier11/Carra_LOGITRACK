@@ -1822,15 +1822,15 @@ const LogiTrackVasche = () => {
           .grid-section, .sidebar { padding: 12px; }
         }
         @media (max-width: 1024px) {
-          .app { padding: 10px 12px 120px; }
+          .app { padding: 10px 12px 20px; }
           .header { padding: 10px 12px; }
           .header h1 { font-size: 21px; }
           .brand-logo-wrap { width: 160px; height: 40px; }
           .brand-logo { max-height: 32px; }
           .app-title { font-size: 19px; }
-          .content { grid-template-columns: 1fr; }
+          .content { grid-template-columns: minmax(0, 1fr) 270px; }
           .content.grid-focus { min-height: auto; }
-          .sidebar { position: static; top: auto; }
+          .sidebar { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
           .selection-card { position: static; top: auto; }
           .users-layout { grid-template-columns: 1fr; }
           .grid-content-layout { gap: 12px !important; }
@@ -1869,7 +1869,6 @@ const LogiTrackVasche = () => {
         @media (max-width: 1100px) {
           .header-top { align-items: flex-start; }
           .header-right { width: 100%; justify-content: flex-end; }
-          .content { grid-template-columns: 1fr; }
           .content.grid-focus { min-height: auto; }
           .users-layout { grid-template-columns: 1fr; }
           .mode-badge { margin-left: 0; }
@@ -2486,7 +2485,7 @@ const LogiTrackVasche = () => {
             />
           )}
 
-          {isTabletLayout && activeTab === 'grid' && mode === 'view' && selectedArticolo && (
+          {isMobileLayout && activeTab === 'grid' && mode === 'view' && selectedArticolo && (
             <TabletActionBar
               selectedArticolo={selectedArticolo}
               statusLabel={getStatusMeta(selectedArticolo.stato).label}
