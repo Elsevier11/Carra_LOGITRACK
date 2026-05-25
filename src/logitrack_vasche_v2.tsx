@@ -1597,7 +1597,12 @@ const LogiTrackVasche = () => {
         </>
       )}
       {compact && (
-        <button className="btn btn-secondary" onClick={() => setSelectedArticolo(null)}>
+        <button className="btn btn-secondary" onClick={() => {
+          setSelectedArticolo(null);
+          setMode('view');
+          setGhostPosition(null);
+          setStagedPlacement(null);
+        }}>
           Chiudi
         </button>
       )}
@@ -2426,6 +2431,12 @@ const LogiTrackVasche = () => {
                       onDuplicate={() => startDuplicateArticolo(selectedArticolo)}
                       onEdit={() => startEditArticolo(selectedArticolo)}
                       onDelete={() => handleDeleteArticolo(selectedArticolo)}
+                      onClose={() => {
+                        setSelectedArticolo(null);
+                        setMode('view');
+                        setGhostPosition(null);
+                        setStagedPlacement(null);
+                      }}
                     />
                   )}
                   <InventorySidebarPanel

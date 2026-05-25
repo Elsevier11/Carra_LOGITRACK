@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, X } from 'lucide-react';
 
 interface Articolo {
   codice: string;
@@ -30,6 +30,7 @@ interface SelectionCardProps {
   onDuplicate: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onClose?: () => void;
 }
 
 export default function SelectionCard({
@@ -46,7 +47,8 @@ export default function SelectionCard({
   canDeleteSelectedArticolo,
   onDuplicate,
   onEdit,
-  onDelete
+  onDelete,
+  onClose
 }: SelectionCardProps) {
   return (
     <div className="selection-card">
@@ -56,13 +58,25 @@ export default function SelectionCard({
           <span className={statusMeta.className}>{statusMeta.label}</span>
         </div>
         {isTabletLayout && (
-          <button
-            className="btn btn-secondary"
-            style={{ padding: '6px 10px', minHeight: '32px' }}
-            onClick={onToggleExpanded}
-          >
-            {isSelectionExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          <>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '6px 10px', minHeight: '32px' }}
+              onClick={onToggleExpanded}
+            >
+              {isSelectionExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {onClose && (
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', minHeight: '32px' }}
+                onClick={onClose}
+                aria-label="Deseleziona"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </>
         )}
       </div>
       <div className="selection-card-code">{selectedArticolo.codice}</div>
