@@ -7,20 +7,21 @@ export const SOLETTA_DEFAULT_LENGTH = 200;
 
 export const GRID_CONFIGS: Record<'VASCA' | 'SOLETTA', GridConfig> = {
   VASCA: {
-    rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'L', 'M'],
-    totalLength: 6338,
+    rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'L', 'M', 'PARK'],
+    totalLength: 6838,
     rowLengths: {
-      A: 6338,
-      B: 6338,
-      C: 6338,
-      D: 6338,
-      E: 3722,
-      F: 3722,
-      G: 3722,
-      H: 3722,
-      I: 3722,
-      L: 4878,
-      M: 4878
+      A: 6838,
+      B: 6838,
+      C: 6838,
+      D: 6838,
+      E: 4222,
+      F: 4222,
+      G: 4222,
+      H: 4222,
+      I: 4222,
+      L: 5378,
+      M: 5378,
+      PARK: 10000
     },
     pixelsPerMeter: 0.08
   },

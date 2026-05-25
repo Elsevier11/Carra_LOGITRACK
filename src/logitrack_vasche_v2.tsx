@@ -2364,9 +2364,20 @@ const LogiTrackVasche = () => {
                           <>
                             {currentGridConfig.rows.map((fila: string) => {
                               const filaLength = getFilaLength(fila);
+                              const isPark = fila === 'PARK';
                               return (
-                                <div key={fila} className="fila-row">
-                                  <div className="fila-label">{fila}</div>
+                                <React.Fragment key={fila}>
+                                  {isPark && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 2px', padding: '0 6px' }}>
+                                      <div style={{ flex: 1, borderTop: '1.5px dashed #94a3b8' }} />
+                                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
+                                        PARCHEGGIO TEMPORANEO
+                                      </span>
+                                      <div style={{ flex: 1, borderTop: '1.5px dashed #94a3b8' }} />
+                                    </div>
+                                  )}
+                                <div className="fila-row">
+                                  <div className="fila-label" style={isPark ? { color: '#64748b', fontSize: 13 } : undefined}>{fila}</div>
                                   <div
                                     className="fila-track"
                                     data-fila={fila}
@@ -2376,7 +2387,7 @@ const LogiTrackVasche = () => {
                                         ? `${(filaLength / maxGridLength) * 100}%`
                                         : getFilaLength(fila) * currentGridConfig.pixelsPerMeter,
                                       height: '52px',
-                                      background: '#f8fafc',
+                                      background: isPark ? '#f0f4ff' : '#f8fafc',
                                       position: 'relative'
                                     }}
                                     onClick={(e: any) => {
@@ -2449,6 +2460,7 @@ const LogiTrackVasche = () => {
                                     )}
                                   </div>
                                 </div>
+                                </React.Fragment>
                               );
                             })}
                           </>

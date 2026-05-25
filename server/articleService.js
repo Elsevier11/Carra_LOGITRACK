@@ -1,16 +1,17 @@
 const SOLETTA_MAX_LEVELS = 10;
 const ROW_LENGTHS = {
-    A: 6338,
-    B: 6338,
-    C: 6338,
-    D: 6338,
-    E: 3722,
-    F: 3722,
-    G: 3722,
-    H: 3722,
-    I: 3722,
-    L: 4878,
-    M: 4878
+    A: 6838,
+    B: 6838,
+    C: 6838,
+    D: 6838,
+    E: 4222,
+    F: 4222,
+    G: 4222,
+    H: 4222,
+    I: 4222,
+    L: 5378,
+    M: 5378,
+    PARK: 10000
 };
 
 function getRowLength(rowName) {
