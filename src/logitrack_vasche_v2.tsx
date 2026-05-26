@@ -360,7 +360,7 @@ const LogiTrackVasche = () => {
           targetCodice: articolo.codice,
           fila: articolo.fila,
           leftOffset: hasLeft ? leftOffset : null,
-          rightOffset: hasRight ? rightOffset : null
+          rightOffset: hasRight ? rightOffset : null,
         });
         return;
       }
@@ -1268,12 +1268,42 @@ const LogiTrackVasche = () => {
     }
   };
 
+  // Controlla se la posizione non valida è dovuta a sovrapposizione con una vasca:
+  // in quel caso propone l'affiancamento invece di mostrare l'errore.
+  // Restituisce true se ha mostrato il popup, false se non applicabile.
+  const tryAdjacentPlacement = useCallback((fila: string, offset: number, excludeId: string | null): boolean => {
+    if (!selectedArticolo || selectedArticolo.tipo !== 'VASCA') return false;
+    const overlapping = articoli.find(v =>
+      v.stato === 'IN_AREA' &&
+      v.tipo === 'VASCA' &&
+      v.fila === fila &&
+      v.id !== selectedArticolo.id &&
+      v.offsetInizio !== null &&
+      offset < (v.offsetInizio! + v.lunghezza) &&
+      (offset + selectedArticolo.lunghezza) > v.offsetInizio!
+    );
+    if (!overlapping) return false;
+    const rightOffset = overlapping.offsetInizio! + overlapping.lunghezza + ADJACENT_GAP_CM;
+    const leftOffset = overlapping.offsetInizio! - selectedArticolo.lunghezza - ADJACENT_GAP_CM;
+    const rightCheck = isPositionAvailable(fila, rightOffset, selectedArticolo.lunghezza, excludeId, selectedArticolo.tipo);
+    const leftCheck = isPositionAvailable(fila, leftOffset, selectedArticolo.lunghezza, excludeId, selectedArticolo.tipo);
+    if (!rightCheck.available && !leftCheck.available) return false;
+    setAdjacentPlacementPrompt({
+      targetCodice: overlapping.codice,
+      fila,
+      leftOffset: leftCheck.available ? leftOffset : null,
+      rightOffset: rightCheck.available ? rightOffset : null,
+    });
+    return true;
+  }, [selectedArticolo, articoli, isPositionAvailable]);
+
   const handlePositionArticolo = (fila: string, offset: number) => {
     if (!selectedArticolo || mode !== 'position') return;
 
     // Per i pozzetti, l'offset passato Ã¨ giÃ  lo slot (1-10)
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, null, selectedArticolo.tipo);
     if (!check.available) {
+      if (tryAdjacentPlacement(fila, offset, null)) return;
       showToast(`Posizione non valida: ${check.reason}`, 'error');
       return;
     }
@@ -1325,6 +1355,7 @@ const LogiTrackVasche = () => {
     }
     const check = isPositionAvailable(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
     if (!check.available) {
+      if (tryAdjacentPlacement(fila, offset, selectedArticolo.id)) return;
       showToast(`Posizione non valida: ${check.reason}`, 'error');
       return;
     }
@@ -1389,44 +1420,6 @@ const LogiTrackVasche = () => {
     if (mode === 'position') handlePositionArticolo(fila, snappedOffset);
     if (mode === 'move') handleMoveArticolo(fila, snappedOffset);
   }, [selectedArticolo, mode, getMagneticOffset, isTabletLayout, stagedPlacement]);
-
-  const touchDragGhostRef = useRef<string | null>(null);
-
-  const handleTouchDragStart = useCallback(() => {
-    if (mode !== 'move') return;
-    setIsDraggingTouch(true);
-  }, [mode]);
-
-  const handleTouchDragMove = useCallback((e: React.TouchEvent) => {
-    if (!isDraggingTouch || mode !== 'move' || !selectedArticolo) return;
-    const touch = e.touches[0];
-    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
-    const trackEl = elements.find(
-      (el): el is HTMLElement => el instanceof HTMLElement && el.hasAttribute('data-fila')
-    );
-    if (!trackEl) return;
-    const fila = trackEl.getAttribute('data-fila')!;
-    const filaLen = parseFloat(trackEl.getAttribute('data-fila-length')!);
-    const rect = trackEl.getBoundingClientRect();
-    const rawOffset = ((touch.clientX - rect.left) / rect.width) * filaLen;
-    const snapped = getMagneticOffset(fila, rawOffset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
-    const pos = `${fila}:${snapped}`;
-    touchDragGhostRef.current = pos;
-    setGhostPosition(pos);
-  }, [isDraggingTouch, mode, selectedArticolo, getMagneticOffset]);
-
-  const handleTouchDragEnd = useCallback(() => {
-    if (!isDraggingTouch) return;
-    setIsDraggingTouch(false);
-    const pos = touchDragGhostRef.current;
-    touchDragGhostRef.current = null;
-    setGhostPosition(null);
-    if (!pos) return;
-    const colonIdx = pos.indexOf(':');
-    const fila = pos.slice(0, colonIdx);
-    const offset = parseFloat(pos.slice(colonIdx + 1));
-    commitMoveArticolo(fila, offset);
-  }, [isDraggingTouch, commitMoveArticolo]);
 
   const getSolettaBlockers = (target: Articolo) => {
     return articoli
@@ -1920,11 +1913,11 @@ const LogiTrackVasche = () => {
         }
         
         /* Modals & Tooltips */
-        .tooltip { position: fixed; pointer-events: none; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 18px; color: white; min-width: 280px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.4); z-index: 10000; transition: opacity 0.2s; }
-        .tooltip-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .tooltip-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .tooltip { position: fixed; pointer-events: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 13px; color: #1e293b; min-width: 200px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 10000; }
+        .tooltip-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid #f1f5f9; }
+        .tooltip-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-bottom: 4px; }
         .tooltip-label { color: #94a3b8; font-weight: 500; }
-        .tooltip-value { font-weight: 700; color: #f8fafc; }
+        .tooltip-value { font-weight: 600; color: #334155; text-align: right; }
         
         .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 99999; }
         .modal { background: white; padding: 32px; border-radius: 18px; max-width: 500px; width: 90%; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.5); position: relative; pointer-events: auto; max-height: 90vh; overflow-y: auto; }
@@ -2160,7 +2153,6 @@ const LogiTrackVasche = () => {
                   )}
 
                   <div className="grid-container" onMouseMove={(e: React.MouseEvent) => {
-                    if (mode === 'view') return;
                     setMousePos({ x: e.clientX, y: e.clientY });
                   }}>
                     <div className="grid-content-layout" style={{ display: 'flex', gap: '18px', alignItems: isTabletLayout ? 'stretch' : 'flex-start', padding: '8px', flexDirection: isTabletLayout ? 'column' : 'row' }}>
@@ -2388,7 +2380,8 @@ const LogiTrackVasche = () => {
                                         : getFilaLength(fila) * currentGridConfig.pixelsPerMeter,
                                       height: '52px',
                                       background: isPark ? '#f0f4ff' : '#f8fafc',
-                                      position: 'relative'
+                                      position: 'relative',
+                                      touchAction: mode === 'move' && isTabletLayout ? 'none' : 'auto'
                                     }}
                                     onClick={(e: any) => {
                                       const rect = e.currentTarget.getBoundingClientRect();
@@ -2398,11 +2391,28 @@ const LogiTrackVasche = () => {
                                     }}
                                     onPointerDown={(e: any) => {
                                       if (e.pointerType === 'mouse') return;
+                                      if ((e.target as HTMLElement).closest('.vasca-block')) return;
                                       e.preventDefault();
                                       const rect = e.currentTarget.getBoundingClientRect();
                                       const x = e.clientX - rect.left;
                                       const offset = computeOffsetFromPointer(fila, x, rect.width, true);
+                                      if (mode === 'move' && isTabletLayout && selectedArticolo) {
+                                        setIsDraggingTouch(true);
+                                        const snapped = getMagneticOffset(fila, offset, selectedArticolo.lunghezza, selectedArticolo.id, selectedArticolo.tipo);
+                                        setGhostPosition(`${fila}:${snapped}`);
+                                        return;
+                                      }
                                       handleTrackTap(fila, offset, 'touch');
+                                    }}
+                                    onPointerUp={(e: any) => {
+                                      if (e.pointerType === 'mouse' || !isDraggingTouch || mode !== 'move') return;
+                                      e.preventDefault();
+                                      setIsDraggingTouch(false);
+                                      if (!ghostPosition) return;
+                                      const colonIdx = ghostPosition.indexOf(':');
+                                      const filaDest = ghostPosition.slice(0, colonIdx);
+                                      const destOffset = parseFloat(ghostPosition.slice(colonIdx + 1));
+                                      handleMoveArticolo(filaDest, destOffset);
                                     }}
                                     onMouseMove={(e: any) => {
                                       if (mode === 'view') return;
@@ -2435,9 +2445,6 @@ const LogiTrackVasche = () => {
                                           onClick={handleArticoloClick}
                                           onMouseEnter={setHoveredArticolo}
                                           onMouseLeave={() => setHoveredArticolo(null)}
-                                          onTouchDragStart={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragStart : undefined}
-                                          onTouchDragMove={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragMove : undefined}
-                                          onTouchDragEnd={mode === 'move' && selectedArticolo?.id === v.id ? handleTouchDragEnd : undefined}
                                         />
                                       );
                                     })}
@@ -2932,7 +2939,7 @@ const LogiTrackVasche = () => {
                 <h2 style={{ fontSize: '20px' }}>Richiesta Conferma</h2>
                 <p style={{ margin: '16px 0 32px', color: '#475569', lineHeight: 1.5 }}>{showConfirmModal.message}</p>
                 <div style={{ display: 'flex', gap: '12px' }}>
-                  <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowConfirmModal(null)}><X size={16} /> No</button>
+                  <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setShowConfirmModal(null); setGhostPosition(null); }}><X size={16} /> No</button>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={showConfirmModal.onConfirm}><Check size={16} /> Si, procedi</button>
                 </div>
               </div>

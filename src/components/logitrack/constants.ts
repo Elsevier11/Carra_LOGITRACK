@@ -21,7 +21,7 @@ export const GRID_CONFIGS: Record<'VASCA' | 'SOLETTA', GridConfig> = {
       I: 4222,
       L: 5378,
       M: 5378,
-      PARK: 10000
+      PARK: 7000
     },
     pixelsPerMeter: 0.08
   },

@@ -142,10 +142,24 @@ export default function SelectionCard({
               </button>
             </span>
           </div>
+          {isTabletLayout && onClose && (
+            <button
+              className="btn btn-secondary"
+              style={{ justifyContent: 'center', width: '100%' }}
+              onClick={onClose}
+            >
+              <X size={14} /> Chiudi selezione
+            </button>
+          )}
         </div>
       ) : (
         <div className="action-hint" style={{ marginBottom: 0 }}>
-          Conferma una posizione sulla planimetria o premi <strong>Esc</strong> per annullare.
+          {isTabletLayout
+            ? 'Conferma una posizione sulla planimetria oppure '
+            : 'Conferma una posizione sulla planimetria o premi '}
+          {isTabletLayout
+            ? <button className="btn btn-secondary" style={{ display: 'inline-flex', padding: '2px 10px', fontSize: '13px', minHeight: '28px' }} onClick={onClose}>Annulla</button>
+            : <><strong>Esc</strong> per annullare.</>}
         </div>
       )}
     </div>

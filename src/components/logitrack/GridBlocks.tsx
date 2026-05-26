@@ -1,44 +1,49 @@
 import React from 'react';
 import type { Articolo } from './types';
 
-export const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: number } }) => (
-  <div className="tooltip" style={{ left: pos.x + 20, top: pos.y - 20 }}>
-    <div className="tooltip-header">
-      <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: vasca.colore }}></div>
-      <span style={{ fontWeight: 800, fontSize: '18px' }}>{vasca.codice}</span>
-    </div>
-    <div className="tooltip-row">
-      <span className="tooltip-label">Cliente:</span>
-      <span className="tooltip-value">{vasca.cliente}</span>
-    </div>
-    <div className="tooltip-row">
-      <span className="tooltip-label">Commessa:</span>
-      <span className="tooltip-value">{vasca.commessa}</span>
-    </div>
-    {vasca.note && (
-      <div className="tooltip-row">
-        <span className="tooltip-label">Note:</span>
-        <span className="tooltip-value">{vasca.note}</span>
+export const DetailTooltip = ({ vasca, pos }: { vasca: Articolo, pos: { x: number, y: number } }) => {
+  const tipW = 220;
+  const left = Math.min(pos.x + 16, window.innerWidth - tipW - 8);
+  const top = pos.y > window.innerHeight - 180 ? pos.y - 160 : pos.y + 16;
+  return (
+    <div className="tooltip" style={{ left, top, minWidth: tipW }}>
+      <div className="tooltip-header">
+        <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: vasca.colore, flexShrink: 0 }}></div>
+        <span style={{ fontWeight: 700, fontSize: '13px' }}>{vasca.codice}</span>
       </div>
-    )}
-    {vasca.tipo !== 'SOLETTA' && (
       <div className="tooltip-row">
-        <span className="tooltip-label">Lunghezza:</span>
-        <span className="tooltip-value">{vasca.lunghezza}cm</span>
+        <span className="tooltip-label">Cliente</span>
+        <span className="tooltip-value">{vasca.cliente}</span>
       </div>
-    )}
-    <div className="tooltip-row">
-      <span className="tooltip-label">Posizione:</span>
-      <span className="tooltip-value">{vasca.posizione || 'Non posizionato'}</span>
+      <div className="tooltip-row">
+        <span className="tooltip-label">Commessa</span>
+        <span className="tooltip-value">{vasca.commessa}</span>
+      </div>
+      {vasca.note && (
+        <div className="tooltip-row">
+          <span className="tooltip-label">Note</span>
+          <span className="tooltip-value">{vasca.note}</span>
+        </div>
+      )}
+      {vasca.tipo !== 'SOLETTA' && (
+        <div className="tooltip-row">
+          <span className="tooltip-label">Lunghezza</span>
+          <span className="tooltip-value">{vasca.lunghezza} cm</span>
+        </div>
+      )}
+      <div className="tooltip-row">
+        <span className="tooltip-label">Posizione</span>
+        <span className="tooltip-value">{vasca.posizione || '—'}</span>
+      </div>
+      {vasca.tipo === 'SOLETTA' && (
+        <div className="tooltip-row">
+          <span className="tooltip-label">Livello</span>
+          <span className="tooltip-value">{vasca.livello}</span>
+        </div>
+      )}
     </div>
-    {vasca.tipo === 'SOLETTA' && (
-      <div className="tooltip-row">
-        <span className="tooltip-label">Livello:</span>
-        <span className="tooltip-value">{vasca.livello}</span>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 export const ArticoloBlock = React.memo(({
   articolo,
@@ -52,9 +57,6 @@ export const ArticoloBlock = React.memo(({
   onClick,
   onMouseEnter,
   onMouseLeave,
-  onTouchDragStart,
-  onTouchDragMove,
-  onTouchDragEnd
 }: any) => {
   const style: React.CSSProperties = {
     left: isScaledVascaLayout ? `${(((articolo.offsetInizio || 0) / filaLength) * 100)}%` : (articolo.offsetInizio || 0) * currentGridConfig.pixelsPerMeter,
@@ -79,7 +81,7 @@ export const ArticoloBlock = React.memo(({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     padding: '0 8px',
-    touchAction: onTouchDragStart ? 'none' : 'manipulation',
+    touchAction: 'manipulation',
   };
 
   return (
@@ -89,9 +91,6 @@ export const ArticoloBlock = React.memo(({
       onClick={(e) => onClick(e, articolo)}
       onMouseEnter={() => onMouseEnter(articolo)}
       onMouseLeave={onMouseLeave}
-      onTouchStart={onTouchDragStart ? (e) => { e.preventDefault(); onTouchDragStart(); } : undefined}
-      onTouchMove={onTouchDragMove ? (e) => { e.preventDefault(); onTouchDragMove(e); } : undefined}
-      onTouchEnd={onTouchDragEnd ? (e) => { e.preventDefault(); onTouchDragEnd(); } : undefined}
     >
       {articolo.codice} {articolo.livello > 1 && `(L${articolo.livello})`}
     </div>
