@@ -11,7 +11,9 @@ const ROW_LENGTHS = {
     I: 4222,
     L: 5378,
     M: 5378,
-    PARK: 10000
+    PARK1: 7000,
+    PARK2: 7000,
+    PARK3: 7000
 };
 
 function getRowLength(rowName) {

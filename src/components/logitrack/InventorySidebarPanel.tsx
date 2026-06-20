@@ -25,12 +25,17 @@ interface InventorySidebarPanelProps {
   setSearchCliente: (value: string) => void;
   searchCommessa: string;
   setSearchCommessa: (value: string) => void;
+  searchNome: string;
+  setSearchNome: (value: string) => void;
   showClienteSuggestions: boolean;
   setShowClienteSuggestions: (value: boolean) => void;
   showCommessaSuggestions: boolean;
   setShowCommessaSuggestions: (value: boolean) => void;
+  showNomeSuggestions: boolean;
+  setShowNomeSuggestions: (value: boolean) => void;
   clienteSuggestions: string[];
   commessaSuggestions: string[];
+  nomeSuggestions: string[];
   filterType: 'all' | 'in_area' | 'creata';
   setFilterType: (value: 'all' | 'in_area' | 'creata') => void;
   onlyActionable: boolean;
@@ -58,12 +63,17 @@ export default function InventorySidebarPanel({
   setSearchCliente,
   searchCommessa,
   setSearchCommessa,
+  searchNome,
+  setSearchNome,
   showClienteSuggestions,
   setShowClienteSuggestions,
   showCommessaSuggestions,
   setShowCommessaSuggestions,
+  showNomeSuggestions,
+  setShowNomeSuggestions,
   clienteSuggestions,
   commessaSuggestions,
+  nomeSuggestions,
   filterType,
   setFilterType,
   onlyActionable,
@@ -133,6 +143,28 @@ export default function InventorySidebarPanel({
                   <div className="suggestion-header">Commesse trovate</div>
                   {commessaSuggestions.map(s => (
                     <div key={s} className="suggestion-item" onClick={() => setSearchCommessa(s)}>
+                      {s}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="search-container">
+              <Search className="search-icon" size={18} />
+              <input
+                type="text"
+                placeholder="Filtra per nome vasca..."
+                className="search-input"
+                value={searchNome}
+                onChange={(e) => setSearchNome(e.target.value)}
+                onFocus={() => setShowNomeSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowNomeSuggestions(false), 200)}
+              />
+              {showNomeSuggestions && nomeSuggestions.length > 0 && (
+                <div className="suggestions-list">
+                  <div className="suggestion-header">Vasche trovate</div>
+                  {nomeSuggestions.map(s => (
+                    <div key={s} className="suggestion-item" onClick={() => setSearchNome(s)}>
                       {s}
                     </div>
                   ))}

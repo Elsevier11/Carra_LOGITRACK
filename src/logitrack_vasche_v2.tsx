@@ -59,8 +59,10 @@ const LogiTrackVasche = () => {
   const [userFormData, setUserFormData] = useState({ username: '', password: '', ruolo: 'OPERATORE' as 'ADMIN' | 'OPERATORE' });
   const [searchCliente, setSearchCliente] = useState('');
   const [searchCommessa, setSearchCommessa] = useState('');
+  const [searchNome, setSearchNome] = useState('');
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
   const [showCommessaSuggestions, setShowCommessaSuggestions] = useState(false);
+  const [showNomeSuggestions, setShowNomeSuggestions] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'in_area' | 'creata'>('all');
   const [selectedArticolo, setSelectedArticolo] = useState<Articolo | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -767,6 +769,7 @@ const LogiTrackVasche = () => {
     return activeArticoli.filter(v => {
       const matchCliente = v.cliente.toLowerCase().includes(searchCliente.toLowerCase());
       const matchCommessa = v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+      const matchNome = v.codice.toLowerCase().includes(searchNome.toLowerCase());
 
       const matchType =
         filterType === 'all' ||
@@ -777,9 +780,9 @@ const LogiTrackVasche = () => {
           : mode === 'move' ? (v.stato === 'IN_AREA' && canMoveArticolo(v))
             : true;
       const matchActionable = onlyActionable ? actionable : true;
-      return matchCliente && matchCommessa && matchType && matchActionable;
+      return matchCliente && matchCommessa && matchNome && matchType && matchActionable;
     });
-  }, [activeArticoli, searchCliente, searchCommessa, filterType, mode, onlyActionable, canMoveArticolo]);
+  }, [activeArticoli, searchCliente, searchCommessa, searchNome, filterType, mode, onlyActionable, canMoveArticolo]);
 
   const clienteSuggestions = useMemo(() => {
     if (!searchCliente) return [];
@@ -798,6 +801,15 @@ const LogiTrackVasche = () => {
         .filter(c => c.toLowerCase().includes(searchCommessa.toLowerCase()) && c.toLowerCase() !== searchCommessa.toLowerCase())
     )).slice(0, 5);
   }, [activeArticoli, searchCommessa]);
+
+  const nomeSuggestions = useMemo(() => {
+    if (!searchNome) return [];
+    return Array.from(new Set(
+      activeArticoli
+        .map(v => v.codice)
+        .filter(c => c.toLowerCase().includes(searchNome.toLowerCase()) && c.toLowerCase() !== searchNome.toLowerCase())
+    )).slice(0, 5);
+  }, [activeArticoli, searchNome]);
 
   const prioritizeSelectedArticolo = useCallback((items: Articolo[]) => {
     if (!selectedArticolo) return items;
@@ -820,21 +832,22 @@ const LogiTrackVasche = () => {
 
   // Ottimizzazione: calcolo preventivo degli ID che devono essere evidenziati
   const highlightedIds = useMemo(() => {
-    const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || selectedArticolo !== null;
+    const isAnyFilterActive = searchCliente !== '' || searchCommessa !== '' || searchNome !== '' || selectedArticolo !== null;
     if (!isAnyFilterActive) return null;
 
     const set = new Set<string>();
     articoli.forEach(v => {
       const matchCliente = searchCliente === '' || v.cliente.toLowerCase().includes(searchCliente.toLowerCase());
       const matchCommessa = searchCommessa === '' || v.commessa.toLowerCase().includes(searchCommessa.toLowerCase());
+      const matchNome = searchNome === '' || v.codice.toLowerCase().includes(searchNome.toLowerCase());
       const isSelected = selectedArticolo?.id === v.id;
-      
-      if (matchCliente && matchCommessa && (!selectedArticolo || isSelected)) {
+
+      if (matchCliente && matchCommessa && matchNome && (!selectedArticolo || isSelected)) {
         set.add(v.id);
       }
     });
     return set;
-  }, [articoli, searchCliente, searchCommessa, selectedArticolo]);
+  }, [articoli, searchCliente, searchCommessa, searchNome, selectedArticolo]);
 
   useEffect(() => {
     if (!selectedArticolo || !inventoryListRef.current) return;
@@ -2356,10 +2369,10 @@ const LogiTrackVasche = () => {
                           <>
                             {currentGridConfig.rows.map((fila: string) => {
                               const filaLength = getFilaLength(fila);
-                              const isPark = fila === 'PARK';
+                              const isPark = fila.startsWith('PARK');
                               return (
                                 <React.Fragment key={fila}>
-                                  {isPark && (
+                                  {fila === 'PARK1' && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 2px', padding: '0 6px' }}>
                                       <div style={{ flex: 1, borderTop: '1.5px dashed #94a3b8' }} />
                                       <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
@@ -2514,12 +2527,17 @@ const LogiTrackVasche = () => {
                     setSearchCliente={setSearchCliente}
                     searchCommessa={searchCommessa}
                     setSearchCommessa={setSearchCommessa}
+                    searchNome={searchNome}
+                    setSearchNome={setSearchNome}
                     showClienteSuggestions={showClienteSuggestions}
                     setShowClienteSuggestions={setShowClienteSuggestions}
                     showCommessaSuggestions={showCommessaSuggestions}
                     setShowCommessaSuggestions={setShowCommessaSuggestions}
+                    showNomeSuggestions={showNomeSuggestions}
+                    setShowNomeSuggestions={setShowNomeSuggestions}
                     clienteSuggestions={clienteSuggestions}
                     commessaSuggestions={commessaSuggestions}
+                    nomeSuggestions={nomeSuggestions}
                     filterType={filterType}
                     setFilterType={setFilterType}
                     onlyActionable={onlyActionable}
