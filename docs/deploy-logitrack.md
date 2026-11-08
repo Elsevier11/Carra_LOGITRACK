@@ -19,7 +19,54 @@ L'email di risposta del 28 maggio 2026, oggetto “Re: Aggiornamento Carra”, r
 
 Questi dati documentano una configurazione storica. Prima di un nuovo rilascio verificare checkout, branch, commit di destinazione, percorso del DB e configurazione realmente utilizzata dal servizio. Non riportare automaticamente il server al commit storico.
 
-Per il rilascio delle modifiche alle solette dell'8 novembre 2026, il checkout di sviluppo segue invece `azienda/feature/yard-manager-multi`, con remote `azienda` su `https://github.com/Zerobyte-SRL/Carra_LOGITRACK.git`. Il push di questo rilascio è destinato al repository aziendale. Il remote `origin` locale continua a indicare il repository storico Elsevier11. Sul server verificare quale remote punti al repository contenente il commit richiesto; non presumere che i nomi dei remote coincidano con quelli del checkout di sviluppo.
+## Pubblicazione sui due repository
+
+Per i prossimi rilasci pubblicare lo stesso commit su entrambi i repository quando il push è autorizzato:
+
+| Remote nel checkout di sviluppo | Repository | Uso |
+| --- | --- | --- |
+| `origin` | `https://github.com/Elsevier11/Carra_LOGITRACK.git` | Riferimento da comunicare a Paolo Andretta per l'aggiornamento del server |
+| `azienda` | `https://github.com/Zerobyte-SRL/Carra_LOGITRACK.git` | Repository aziendale da mantenere aggiornato allo stesso commit |
+
+Il branch di rilascio attuale è `feature/yard-manager-multi`. Il fatto che il checkout segua `azienda/feature/yard-manager-multi` non sostituisce il push su Elsevier11. Per le modifiche alle solette dell'8 novembre 2026, il commit `e097dde` è stato pubblicato e verificato su entrambi.
+
+Dopo i controlli locali e il commit, verificare gli URL dei remote e che il push sia fast-forward, quindi pubblicare e confrontare gli SHA:
+
+```bash
+git remote -v
+git push origin HEAD:refs/heads/feature/yard-manager-multi
+git push azienda HEAD:refs/heads/feature/yard-manager-multi
+git rev-parse HEAD
+git ls-remote origin refs/heads/feature/yard-manager-multi
+git ls-remote azienda refs/heads/feature/yard-manager-multi
+```
+
+Eseguire i comandi uno alla volta, verificandone l'esito. Il rilascio è pubblicato su entrambi solo quando gli SHA dei due branch remoti coincidono con il commit previsto. Se un push fallisce o il remoto è divergente, non forzarlo e non dichiarare completata la pubblicazione su entrambi: segnalare l'esito parziale e risolvere la divergenza preservando il lavoro esistente. Il push non comprende l'esecuzione del deploy o l'invio della mail.
+
+## Mail sintetica a Paolo Andretta
+
+Ad Andretta indicare il repository Elsevier11 e richiamare la procedura già concordata. La mail deve contenere un breve riepilogo delle modifiche effettivamente incluse, branch e commit, richiesta di backup e preservazione DB e richiesta di conferma per organizzare la verifica con il cliente. Non riportare comandi e runbook completi salvo richiesta esplicita, cambio di procedura o un problema specifico che lo richieda. Non inviare la mail senza autorizzazione.
+
+Traccia da adattare al rilascio:
+
+> Oggetto: Aggiornamento LogiTrack – [area modificata]
+>
+> Ciao Paolo,
+>
+> ho pubblicato sul solito repository Elsevier11 la nuova versione di LogiTrack con queste modifiche:
+>
+> - [modifica concreta 1]
+> - [modifica concreta 2]
+> - [eventuale ulteriore modifica]
+>
+> Puoi procedere con l'aggiornamento con la solita modalità, facendo prima un backup e preservando il database esistente?
+>
+> Il branch rimane `feature/yard-manager-multi`; il nuovo commit è `[SHA verificato]`.
+>
+> Fammi sapere quando è aggiornato, così avvisiamo Nadia e Mirco per la verifica.
+>
+> Grazie,
+> Paolo
 
 ## Persistenza e configurazione
 
@@ -88,17 +135,17 @@ Verificare che ogni copia sia riuscita e che il backup sia leggibile prima di co
 
 ### 3. Aggiornare codice e container
 
-Per il rilascio corrente scegliere il remote che punta al repository aziendale verificato sopra e controllare di essere sul branch `feature/yard-manager-multi`. Nell'esempio `azienda` è il nome del remote nel checkout di sviluppo: sul server potrebbe chiamarsi `origin` o diversamente.
+Sul server usare il remote che punta a Elsevier11 e controllare di essere sul branch `feature/yard-manager-multi`. Nell'esempio questo remote si chiama `origin`: verificarne l'URL, senza presumere che i nomi coincidano con quelli del checkout di sviluppo.
 
 ```bash
-RELEASE_REMOTE=azienda
+RELEASE_REMOTE=origin
 git fetch "$RELEASE_REMOTE"
 git pull --ff-only "$RELEASE_REMOTE" feature/yard-manager-multi
 docker compose build --no-cache
 docker compose up -d --force-recreate
 ```
 
-Eseguire un comando alla volta e fermarsi se fallisce. L'opzione `--ff-only` è una cautela aggiunta a questa procedura per evitare merge impliciti sul server; nella mail del 28 maggio il comando era `git pull origin feature/yard-manager-multi` sul repository storico Elsevier11. Se sul server manca un remote verso il repository del rilascio, chiarire la configurazione prima di aggiornare, senza sostituire automaticamente i remote esistenti.
+Eseguire un comando alla volta e fermarsi se fallisce. L'opzione `--ff-only` è una cautela aggiunta a questa procedura per evitare merge impliciti sul server; nella mail del 28 maggio il comando era `git pull origin feature/yard-manager-multi` sul repository Elsevier11, che resta il riferimento per Andretta. Se sul server manca un remote verso quel repository, chiarire la configurazione prima di aggiornare, senza sostituire automaticamente i remote esistenti.
 
 Il solo `docker compose build --no-cache` non scarica il nuovo codice: senza aggiornamento Git ricostruisce la versione già presente. Non modificare `runtime-data` e non usare `docker compose down -v`. Preservare secret e configurazione locale anche dopo il pull.
 
