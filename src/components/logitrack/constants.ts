@@ -1,7 +1,7 @@
 import type { GridConfig } from './types';
 
-export const SOLETTA_PILES = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
-export const SOLETTA_MAX_LEVELS = 10;
+export const SOLETTA_PILES = Array.from({ length: 18 }, (_, i) => `P${i + 1}`);
+export const SOLETTA_MAX_LEVELS = 12;
 export const SOLETTA_LEVEL_HEIGHT_PX = 20;
 export const SOLETTA_DEFAULT_LENGTH = 200;
 

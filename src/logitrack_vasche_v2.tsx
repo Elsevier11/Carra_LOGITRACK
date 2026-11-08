@@ -290,18 +290,10 @@ const LogiTrackVasche = () => {
     return isSolettaOnTopOfPile(articolo);
   }, [isSolettaOnTopOfPile]);
   const canSelectArticolo = useCallback((articolo: Articolo | null) => {
-    if (!articolo) return false;
-    if (articolo.tipo !== 'SOLETTA') return true;
-    if (articolo.stato !== 'IN_AREA') return true;
-    return isSolettaOnTopOfPile(articolo);
-  }, [isSolettaOnTopOfPile]);
-  const selectArticoloDisabledReason = useCallback((articolo: Articolo | null) => {
-    if (!articolo) return '';
-    if (articolo.tipo === 'SOLETTA' && articolo.stato === 'IN_AREA' && !isSolettaOnTopOfPile(articolo)) {
-      return 'Solo le solette in cima alla pila possono essere selezionate.';
-    }
-    return '';
-  }, [isSolettaOnTopOfPile]);
+    // Consultation/editing is independent from physical movement permissions.
+    return Boolean(articolo);
+  }, []);
+  const selectArticoloDisabledReason = useCallback((_articolo: Articolo | null) => '', []);
   const moveDisabledReason = useMemo(() => {
     if (!selectedArticolo || selectedArticolo.stato !== 'IN_AREA') return '';
     if (selectedArticolo.tipo === 'SOLETTA' && !isSolettaOnTopOfPile(selectedArticolo)) {
@@ -371,15 +363,8 @@ const LogiTrackVasche = () => {
     }
 
     event.stopPropagation();
-    if (!canSelectArticolo(articolo)) {
-      setShowInfoModal({
-        title: 'Selezione non consentita',
-        message: 'Solo le solette in cima alla pila possono essere selezionate.'
-      });
-      return;
-    }
     setSelectedArticolo(articolo);
-  }, [canSelectArticolo, mode, selectedArticolo, showToast]);
+  }, [mode, selectedArticolo, showToast]);
   const startEditArticolo = useCallback((articolo: Articolo) => {
     setShowConfirmModal({
       message: `Vuoi modificare i dati di ${articolo.codice}?`,
@@ -520,12 +505,12 @@ const LogiTrackVasche = () => {
   useEffect(() => {
     if (!selectedArticolo) return;
     if (mode === 'view') return;
-    if (!canSelectArticolo(selectedArticolo)) {
+    if (mode === 'move' && !canMoveArticolo(selectedArticolo)) {
       setSelectedArticolo(null);
       setMode('view');
       setGhostPosition(null);
     }
-  }, [canSelectArticolo, mode, selectedArticolo]);
+  }, [canMoveArticolo, mode, selectedArticolo]);
 
   useEffect(() => {
     if (mode === 'view' || !selectedArticolo) {
@@ -2277,16 +2262,16 @@ const LogiTrackVasche = () => {
                                       gridTemplateColumns: `repeat(${solettaColumns}, minmax(${isMobileLayout ? 120 : 140}px, 1fr))`,
                                       gap: '12px',
                                       alignItems: 'end',
-                                      marginTop: rowIndex === 1 ? '10px' : 0
+                                      marginTop: rowIndex > 0 ? '10px' : 0
                                     }}
                                   >
-                                    {row.map((pile, index) => {
+                                    {row.map((pile) => {
                                       const pileItems = [...(articoliPerFila[pile] || [])].sort((a, b) => a.livello - b.livello);
                                       const occupiedLevels = pileItems.length;
                                       const pileLoadStyle = getPileLoadStyle(occupiedLevels);
                                       return (
                                         <div key={pile} className="pile-column">
-                                          <div className="pile-index">{rowIndex * solettaColumns + index + 1}</div>
+                                          <div className="pile-index">{pile}</div>
                                           <div
                                             className="fila-track"
                                             style={{

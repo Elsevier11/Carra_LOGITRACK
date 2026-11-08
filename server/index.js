@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const db = require('./database');
 const { v4: uuidv4 } = require('uuid');
-const { mutateArticleState } = require('./articleService');
+const { mutateArticleState, validateArticleTransition, buildPositionLabel, withArticleMutation } = require('./articleService');
 const {
     SESSION_COOKIE_NAME,
     createSessionToken,
@@ -302,13 +302,38 @@ app.post('/api/articoli', requireAuth, (req, res) => {
         normalizeNullableTrimmedString(note)
     ];
 
-    db.run(sql, params, function (insertErr) {
-        if (insertErr) {
-            res.status(500).json({ error: insertErr.message });
-            return;
-        }
-        res.status(201).json({ id, message: 'Elemento creato correttamente' });
+    const insertArticle = () => new Promise(resolve => {
+        db.run(sql, params, function (insertErr) {
+            if (insertErr) {
+                res.status(500).json({ error: insertErr.message });
+            } else {
+                res.status(201).json({ id, message: 'Elemento creato correttamente' });
+            }
+            resolve();
+        });
     });
+
+    if (normalizedType === 'SOLETTA' && normalizedState === 'IN_AREA') {
+        withArticleMutation(db, async () => {
+            const peers = await new Promise((resolve, reject) => {
+                db.all('SELECT * FROM articoli', [], (err, rows) => err ? reject(err) : resolve(rows));
+            });
+            const nextArticle = { id, tipo: normalizedType, stato: normalizedState,
+                fila: params[6], offsetInizio: params[7] };
+            const error = validateArticleTransition({ id, tipo: normalizedType, stato: 'CREATA' }, nextArticle, peers);
+            if (error) {
+                sendValidationError(res, error);
+                return;
+            }
+            const nextLevel = peers.filter(peer => peer.tipo === 'SOLETTA' &&
+                peer.stato === 'IN_AREA' && peer.fila === nextArticle.fila).length + 1;
+            params[9] = nextLevel;
+            params[5] = buildPositionLabel(normalizedType, nextArticle.fila, 0, nextLevel);
+            await insertArticle();
+        }).catch(err => res.status(500).json({ error: err.message }));
+    } else {
+        insertArticle();
+    }
 });
 app.put('/api/articoli/:id', requireAuth, (req, res) => {
     const { id } = req.params;

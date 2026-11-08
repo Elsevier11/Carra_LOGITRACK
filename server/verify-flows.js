@@ -1,6 +1,10 @@
-require('./index.js');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+process.env.LOGITRACK_DB_PATH = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'logitrack-smoke-')), 'vasche.db');
+process.env.PORT = '0';
+const { server } = require('./index.js');
 
-const BASE_URL = 'http://127.0.0.1:3001';
 const ROW_LENGTHS = {
     A: 6338,
     B: 6338,
@@ -14,7 +18,7 @@ const ROW_LENGTHS = {
     L: 4878,
     M: 4878
 };
-const SOLETTA_PILES = Array.from({ length: 12 }, (_, index) => `P${index + 1}`);
+const SOLETTA_PILES = Array.from({ length: 18 }, (_, index) => `P${index + 1}`);
 
 function assert(condition, message) {
     if (!condition) {
@@ -31,7 +35,7 @@ async function parseJsonSafe(response) {
 }
 
 async function request(path, options = {}) {
-    const response = await fetch(`${BASE_URL}${path}`, options);
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, options);
     const data = await parseJsonSafe(response);
     return { response, data };
 }

@@ -1,4 +1,15 @@
-const SOLETTA_MAX_LEVELS = 10;
+const SOLETTA_MAX_LEVELS = 12;
+const SOLETTA_PILES = new Set(Array.from({ length: 18 }, (_, i) => `P${i + 1}`));
+const mutationQueues = new WeakMap();
+
+// Keep capacity checks and writes in order across requests sharing this DB.
+// A rejected request must not prevent later mutations from running.
+function withArticleMutation(db, operation) {
+    const previous = mutationQueues.get(db) || Promise.resolve();
+    const pending = previous.then(operation);
+    mutationQueues.set(db, pending.catch(() => {}));
+    return pending;
+}
 const ROW_LENGTHS = {
     A: 6838,
     B: 6838,
@@ -27,6 +38,20 @@ function buildPositionLabel(tipo, fila, offsetInizio, livello) {
 }
 
 function validateArticleTransition(currentArticle, nextArticle, peerArticles) {
+    if (currentArticle.tipo === 'SOLETTA' && currentArticle.stato === 'IN_AREA') {
+        const hasBlockingItems = peerArticles.some(peer =>
+            peer.tipo === 'SOLETTA' && peer.stato === 'IN_AREA' &&
+            peer.fila === currentArticle.fila && peer.id !== currentArticle.id &&
+            peer.livello > currentArticle.livello
+        );
+        // Metadata edits use a separate API path. Every position/state mutation
+        // must respect the physical order of the pile, including generic PUTs.
+        if (hasBlockingItems) {
+            return nextArticle.stato === 'SPEDITA'
+                ? 'Scarico non consentito: la soletta non e in cima alla pila'
+                : 'Spostamento non consentito: la soletta non e in cima alla pila';
+        }
+    }
     if (nextArticle.stato === 'CREATA') {
         if (nextArticle.fila !== null || nextArticle.offsetInizio !== null) {
             return 'Un articolo in attesa non puo avere una posizione assegnata';
@@ -35,17 +60,6 @@ function validateArticleTransition(currentArticle, nextArticle, peerArticles) {
     }
 
     if (nextArticle.stato === 'SPEDITA') {
-        if (currentArticle.tipo === 'SOLETTA') {
-            const hasBlockingItems = peerArticles.some(peer =>
-                peer.stato === 'IN_AREA' &&
-                peer.fila === currentArticle.fila &&
-                peer.id !== currentArticle.id &&
-                peer.livello > currentArticle.livello
-            );
-            if (hasBlockingItems) {
-                return 'Scarico non consentito: la soletta non e in cima alla pila';
-            }
-        }
         return null;
     }
 
@@ -54,6 +68,9 @@ function validateArticleTransition(currentArticle, nextArticle, peerArticles) {
     }
 
     if (nextArticle.tipo === 'SOLETTA') {
+        if (!SOLETTA_PILES.has(nextArticle.fila)) {
+            return 'Pila non valida: scegli una posizione da P1 a P18';
+        }
         if (nextArticle.offsetInizio !== 0) {
             return 'Le solette possono essere posizionate solo all offset 0 della pila';
         }
@@ -170,7 +187,11 @@ async function relevelSolettaPile(db, pile) {
     return updates;
 }
 
-async function mutateArticleState(db, articleId, patch) {
+function mutateArticleState(db, articleId, patch) {
+    return withArticleMutation(db, () => applyArticleState(db, articleId, patch));
+}
+
+async function applyArticleState(db, articleId, patch) {
     const currentArticle = await getAsync(db, 'SELECT * FROM articoli WHERE id = ?', [articleId]);
     if (!currentArticle) {
         return { error: 'Articolo non trovato', status: 404 };
@@ -225,6 +246,7 @@ async function mutateArticleState(db, articleId, patch) {
 }
 
 module.exports = {
+    withArticleMutation,
     buildPositionLabel,
     mutateArticleState,
     relevelSolettaPile,

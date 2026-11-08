@@ -1,5 +1,11 @@
 const assert = require('node:assert/strict');
 const sqlite3 = require('sqlite3').verbose();
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+// Always test against a disposable DB and an OS-assigned port.
+process.env.LOGITRACK_DB_PATH = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'logitrack-test-')), 'vasche.db');
+process.env.PORT = '0';
 const {
     buildPositionLabel,
     mutateArticleState,
@@ -8,7 +14,6 @@ const {
 } = require('./articleService');
 const { server } = require('./index');
 
-const BASE_URL = 'http://127.0.0.1:3001';
 let authCookie = null;
 const createdUserIds = [];
 const createdArticleIds = [];
@@ -99,7 +104,7 @@ async function parseJsonSafe(response) {
 }
 
 async function request(path, options = {}) {
-    const response = await fetch(`${BASE_URL}${path}`, options);
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, options);
     const data = await parseJsonSafe(response);
     return { response, data };
 }
@@ -150,6 +155,20 @@ async function runArticleServiceTests() {
     );
     assert.equal(blockedShipError, 'Scarico non consentito: la soletta non e in cima alla pila');
     logPass('validateArticleTransition blocks overlaps and blocked shipping');
+
+    const waiting = { id: 'new', tipo: 'SOLETTA', stato: 'CREATA' };
+    const placed = { ...waiting, stato: 'IN_AREA', fila: 'P18', offsetInizio: 0 };
+    const peers = Array.from({ length: 12 }, (_, i) => ({
+        id: `stack-${i}`, tipo: 'SOLETTA', stato: 'IN_AREA', fila: 'P18', livello: i + 1
+    }));
+    for (const count of [10, 11]) {
+        assert.equal(validateArticleTransition(waiting, placed, peers.slice(0, count)), null);
+    }
+    assert.equal(validateArticleTransition(waiting, placed, peers), 'Pila piena: massimo 12 solette');
+    const buried = peers[0];
+    assert.equal(validateArticleTransition(buried, { ...buried, fila: 'P17', offsetInizio: 0 }, peers.slice(1)),
+        'Spostamento non consentito: la soletta non e in cima alla pila');
+    logPass('solette allow levels 11/12, reject 13 and reject moving buried pieces');
 
     let db = await openInMemoryDb();
     try {
@@ -331,6 +350,107 @@ async function runApiIntegrationTests() {
     assert.equal(duplicate.response.status, 201);
     createdArticleIds.push(`${articleId}-dup`);
     logPass('article creation allows duplicate codes');
+
+    const headers = { cookie: authCookie, 'Content-Type': 'application/json' };
+    const solettaIds = [];
+    for (let i = 1; i <= 13; i += 1) {
+        const id = `api-soletta-${uniqueSuffix}-${i}`;
+        const created = await request('/api/articoli', {
+            method: 'POST', headers,
+            body: JSON.stringify({ id, codice: `S-${i}`, cliente: 'CLIENTE', commessa: 'COMM',
+                lunghezza: 200, lunghezzaSolettaCm: 200, altezzaSolettaCm: 20,
+                colore: '#0ea5e9', stato: 'CREATA', tipo: 'SOLETTA', dataCreazione: new Date().toISOString() })
+        });
+        assert.equal(created.response.status, 201);
+        solettaIds.push(id);
+        const positioned = await request(`/api/articoli/${id}/position`, {
+            method: 'POST', headers, body: JSON.stringify({ fila: 'P18', offsetInizio: 0 })
+        });
+        assert.equal(positioned.response.status, i <= 12 ? 200 : 400);
+        if (i <= 12) assert.equal(positioned.data.articolo.livello, i);
+        else assert.match(positioned.data.error, /massimo 12 solette/);
+    }
+    logPass('API accepts P18 and twelve levels, rejects the thirteenth');
+
+    const directCreateBody = { id: `direct-${uniqueSuffix}`, codice: 'DIRECT', cliente: 'CLIENTE', commessa: 'COMM',
+        lunghezza: 200, colore: '#0ea5e9', tipo: 'SOLETTA', stato: 'IN_AREA', fila: 'P18', offsetInizio: 0,
+        livello: 99, dataCreazione: new Date().toISOString() };
+    const directOverflow = await request('/api/articoli', {
+        method: 'POST', headers, body: JSON.stringify(directCreateBody)
+    });
+    assert.equal(directOverflow.response.status, 400, 'direct creation cannot bypass capacity');
+    const invalidPile = await request(`/api/articoli/${solettaIds[12]}/position`, {
+        method: 'POST', headers, body: JSON.stringify({ fila: 'P19', offsetInizio: 0 })
+    });
+    assert.equal(invalidPile.response.status, 400, 'nonexistent pile must be rejected');
+    const directValid = await request('/api/articoli', {
+        method: 'POST', headers, body: JSON.stringify({ ...directCreateBody, fila: 'P15' })
+    });
+    assert.equal(directValid.response.status, 201);
+    logPass('direct creation obeys capacity and invalid piles are rejected');
+
+    const snapshot = () => request('/api/articoli', { headers });
+    const before = (await snapshot()).data;
+    const directlyPlaced = before.find(a => a.id === directCreateBody.id);
+    assert.equal(directlyPlaced.fila, 'P15');
+    assert.equal(directlyPlaced.livello, 1);
+    assert.equal(directlyPlaced.posizione, 'P15 @ Pila (L1)');
+    const logsBefore = (await request('/api/registro', { headers })).data;
+    const middleId = solettaIds[5];
+    const edited = await request(`/api/articoli/${middleId}`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ codice: 'S-CENTRALE', cliente: 'NUOVO CLIENTE', commessa: 'NUOVA COMM',
+            note: 'Modificata senza movimentazione', lunghezzaSolettaCm: 250, altezzaSolettaCm: 25 })
+    });
+    assert.equal(edited.response.status, 200);
+    const after = (await snapshot()).data;
+    for (const oldArticle of before.filter(a => solettaIds.includes(a.id))) {
+        const updated = after.find(a => a.id === oldArticle.id);
+        for (const key of ['fila', 'livello', 'posizione', 'offsetInizio', 'stato']) {
+            assert.deepEqual(updated[key], oldArticle[key], `${oldArticle.id}: ${key} unchanged after metadata edit`);
+        }
+    }
+    const middle = after.find(a => a.id === middleId);
+    assert.equal(middle.codice, 'S-CENTRALE');
+    assert.equal(middle.lunghezzaSolettaCm, 250);
+    assert.deepEqual((await request('/api/registro', { headers })).data, logsBefore);
+    logPass('editing middle-piece metadata preserves all pile positions and movement history');
+
+    for (const [route, method, body] of [
+        ['/move', 'POST', { fila: 'P17', offsetInizio: 0 }],
+        ['/position', 'POST', { fila: 'P17', offsetInizio: 0 }],
+        ['/ship', 'POST', {}],
+        ['', 'PUT', { fila: 'P17', offsetInizio: 0, stato: 'IN_AREA' }],
+        ['', 'PUT', { fila: null, offsetInizio: null, stato: 'SPEDITA', livello: 0 }],
+        ['', 'PUT', { fila: null, offsetInizio: null, stato: 'CREATA' }]
+    ]) {
+        const blocked = await request(`/api/articoli/${middleId}${route}`, {
+            method, headers, body: JSON.stringify(body)
+        });
+        assert.equal(blocked.response.status, 400, `${method} ${route} must reject buried pieces`);
+    }
+    assert.deepEqual((await snapshot()).data, after);
+    const movedTop = await request(`/api/articoli/${solettaIds[11]}/move`, {
+        method: 'POST', headers, body: JSON.stringify({ fila: 'P17', offsetInizio: 0 })
+    });
+    assert.equal(movedTop.response.status, 200);
+    assert.equal(movedTop.data.articolo.livello, 1);
+    const shippedTop = await request(`/api/articoli/${solettaIds[10]}/ship`, { method: 'POST', headers });
+    assert.equal(shippedTop.response.status, 200);
+    logPass('API blocks buried-piece movements on all routes; top-piece move/ship still work');
+
+    await request(`/api/articoli/${solettaIds[12]}/position`, {
+        method: 'POST', headers, body: JSON.stringify({ fila: 'P18', offsetInizio: 0 })
+    });
+    const races = await Promise.all([1, 2].map(i => request('/api/articoli', {
+        method: 'POST', headers,
+        body: JSON.stringify({ ...directCreateBody, id: `race-${uniqueSuffix}-${i}` })
+    })));
+    assert.deepEqual(races.map(r => r.response.status).sort(), [201, 400]);
+    const fullPile = (await snapshot()).data.filter(a => a.fila === 'P18' && a.stato === 'IN_AREA');
+    assert.equal(fullPile.length, 12);
+    assert.deepEqual(fullPile.map(a => a.livello).sort((a, b) => a - b), Array.from({ length: 12 }, (_, i) => i + 1));
+    logPass('concurrent creation cannot exceed twelve or duplicate levels');
 
     const logout = await request('/api/logout', {
         method: 'POST',
